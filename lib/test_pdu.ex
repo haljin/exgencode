@@ -1,4 +1,7 @@
-defmodule TestPdu do
+defmodule Exgencode.TestPdu do
+  @moduledoc false
+  # This is an internal testing file - it is been build due to protocol consolidation
+
   require Exgencode
   import Exgencode
 

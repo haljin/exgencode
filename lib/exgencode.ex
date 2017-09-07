@@ -4,8 +4,11 @@ defmodule Exgencode do
   """
 
   defprotocol Pdu do
+    @doc "Returns the size of the field in bits."
     def sizeof(pdu, fieldName)
+    @doc "Encode the Elixir structure into a binary."
     def encode(pdu)
+    @doc "Decode a binary into the specified Elixir structure."
     def decode(pdu, binary)
   end
 
@@ -117,6 +120,7 @@ defmodule Exgencode do
     
     quote do
       defmodule unquote(name) do
+        @moduledoc false
         fields = for {fieldName, props} <- unquote(fieldList), props[:type] != :constant do {fieldName, props[:default]} end
         defstruct fields
         

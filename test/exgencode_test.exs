@@ -1,6 +1,8 @@
 defmodule ExgencodeTest do
   use ExUnit.Case
 
+  alias Exgencode.TestPdu
+
 
   test "basic pdu definition" do
     pdu = %TestPdu.PzTestMsg{}
