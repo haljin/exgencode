@@ -41,13 +41,13 @@ defmodule Exgencode do
   ### size 
   Defines the size of field in bits. If the field is of type :subrecord the :size is unused.
     
-      defpdu SomePdu
+      defpdu SomePdu,
         someField: [size: 12]
 
   ### default
   Defines the default value that the field should assume when building a new Elixir structure of the given PDU.
 
-      defpdu PduWithDefault
+      defpdu PduWithDefault,
         aFieldWithDefault: [size: 10, default: 15]
 
   ### type
@@ -69,7 +69,7 @@ defmodule Exgencode do
         someField: [size: 10, default: 1]
 
       defpdu TopPdu,
-        aField: [size: 24]
+        aField: [size: 24],
         subPdu: [type: :subrecord, default: %SupPud{}]
 
   ### encode/decode
@@ -77,7 +77,7 @@ defmodule Exgencode do
   a custom decode function. Custom encode and decode functions can override any of the other parameters the field has if the user wishes it so.
 
       defpdu CustomPdu,
-        normalField: [size: 16, default: 3]
+        normalField: [size: 16, default: 3],
         customField: [encode: fn(val) -> << val :: size(12) >> end,
                       decode: fn(pdu, << val :: size(12) >>) -> {struct(pdu, :customField => val), <<>>} end]
 
