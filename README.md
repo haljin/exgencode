@@ -1,7 +1,5 @@
 # Exgencode
-
-**TODO: Add description**
-
+[![Build Status](https://travis-ci.org/haljin/exgencode.svg?branch=master)](https://travis-ci.org/haljin/exgencode)
 ## Installation
 
 If [available in Hex](https://hex.pm/docs/publish), the package can be installed
