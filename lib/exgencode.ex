@@ -106,7 +106,7 @@ defmodule Exgencode do
               quote do fn(pdu, << unquote(defVal) :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {pdu, restBinary} end end
             _ ->
               fieldSize = props[:size]
-              quote do fn(pdu, << fieldValue :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {struct(pdu, %{unquote(fieldName) => fieldValue}), restBinary} end end
+              quote do fn(pdu, << fieldValue :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {struct!(pdu, %{unquote(fieldName) => fieldValue}), restBinary} end end
           end         
           {fieldName, [{:encode, customEncodeFun}, {:decode, customDecodeFun} | props]}
         {_encodeFun, nil} -> 
@@ -117,6 +117,9 @@ defmodule Exgencode do
           {fieldName, props}
       end
     end
+    
+    fieldsForEncodes = for {fieldName, props} <- fieldList do {fieldName, props[:encode]} end
+    fieldsForDencodes = for {fieldName, props} <- fieldList do {fieldName, props[:decode]} end
     
     quote do
       defmodule unquote(name) do
@@ -133,17 +136,17 @@ defmodule Exgencode do
         end
 
         def encode(pdu) do
-          for {field, props} <- unquote(fieldList), into: <<>> do
-            props[:encode].(Map.get(pdu, field))
+          for {field, encodeFun} <- unquote(fieldsForEncodes), into: <<>> do
+            encodeFun.(Map.get(pdu, field))
           end
         end
 
         def decode(pdu, binary) do      
-          do_decode(pdu, binary, unquote(fieldList))
+          do_decode(pdu, binary, unquote(fieldsForDencodes))
         end
 
-        defp do_decode(pdu, binary, [{field, props} | rest]) do
-          {newPdu, restBinary} = props[:decode].(pdu, binary)
+        defp do_decode(pdu, binary, [{field, decodeFun} | rest]) do
+          {newPdu, restBinary} = decodeFun.(pdu, binary)
           do_decode(newPdu, restBinary, rest)
         end
         defp do_decode(pdu, restBin, []) do
