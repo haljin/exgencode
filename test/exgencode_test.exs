@@ -2,7 +2,7 @@ defmodule ExgencodeTest do
   use ExUnit.Case
 
 
-  test "greets the world" do
+  test "basic pdu definition" do
     pdu = %TestPdu.PzTestMsg{}
     assert pdu.testField == 1
     assert Exgencode.Pdu.sizeof(%TestPdu.PzTestMsg{}, :testField) == 12
@@ -20,6 +20,12 @@ defmodule ExgencodeTest do
     pdu = %TestPdu.PzTestMsg{otherTestField: 100}
     binary = << 1 :: size(12), 100 :: size(24), 15 :: size(8), 10 :: size(24)>>
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, binary)
+  end
+  
+  test "incorrect constant fails" do
+    pdu = %TestPdu.PzTestMsg{otherTestField: 100}
+    binary = << 1 :: size(12), 100 :: size(24), 15 :: size(8), 99 :: size(24)>>
+    assert_raise FunctionClauseError, fn ->  {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, binary) end
   end
 
   test "custom encode" do

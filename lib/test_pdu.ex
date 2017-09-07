@@ -8,8 +8,8 @@ defmodule TestPdu do
   defpdu PzTestMsg, 
     testField: [default: 1, size: 12], 
     otherTestField: [size: 24],
-    subSection: [default: %MsgSubSection{}, size: :subrecord],
-    constField: [default: 10, size: 24, constant: true]
+    subSection: [default: %MsgSubSection{}, type: :subrecord],
+    constField: [default: 10, size: 24, type: :constant]
   
   defpdu CustomEncodeMsg,
     randomField: [size: 1],
