@@ -34,7 +34,7 @@ defmodule ExgencodeTest do
 
   test "encode/decode symmetry" do
     pdu = %TestPdu.PzTestMsg{otherTestField: 100}
-    customPdu = %TestPdu.CustomEncodeMsg{randomField: 0, customField}
+    customPdu = %TestPdu.CustomEncodeMsg{randomField: 0, customField: 6}
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, Exgencode.Pdu.encode(pdu))
     assert {^customPdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.CustomEncodeMsg{}, Exgencode.Pdu.encode(customPdu))
   end
