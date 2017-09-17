@@ -17,7 +17,7 @@ by adding `exgencode` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:exgencode, "~> 0.1.0"}
+    {:exgencode, "~> 1.0.0"}
   ]
 end
 ```
