@@ -3,13 +3,13 @@ defmodule Exgencode do
   Documentation for Exgencode.
   """
 
-  defprotocol Pdu do
+  defprotocol Pdu.Protocol do
     @doc "Returns the size of the field in bits."
     def sizeof(pdu, fieldName)
-    @doc "Encode the Elixir structure into a binary."
-    def encode(pdu)
+    @doc "Encode the Elixir structure into a binary give the protocol version."
+    def encode(pdu, version)
     @doc "Decode a binary into the specified Elixir structure."
-    def decode(pdu, binary)
+    def decode(pdu, binary, version)
   end
 
   @typedoc "A PDU, that is an Elixir structure representing a PDU."
@@ -23,7 +23,7 @@ defmodule Exgencode do
   @typedoc "A custom decoding function that receives the PDU decoded so far and remaining binary and is meant to return PDU with the field decoded and remaining binary."
   @type fieldDecodeFun :: ((pdu, bitstring) -> {pdu, bitstring})
   @typedoc "Parameters of the given field"
-  @type fieldParam :: {:size, non_neg_integer} | {:type, fieldType} | {:encode, fieldEncodeFun} | {:decode, fieldDecodeFun}
+  @type fieldParam :: {:size, non_neg_integer} | {:type, fieldType} | {:encode, fieldEncodeFun} | {:decode, fieldDecodeFun} | {:version, Version.requirement}
   @typedoc "Name of the field."
   @type fieldName :: atom
 
@@ -81,6 +81,15 @@ defmodule Exgencode do
         customField: [encode: fn(val) -> << val :: size(12) >> end,
                       decode: fn(pdu, << val :: size(12) >>) -> {struct(pdu, :customField => val), <<>>} end]
 
+  ### version
+  Defines the requirement for the protocol version for the given field to be included in the message. When a version is specified `encode/2` and `decode/3` can take
+  an optional parameter with the given version name. If the given version matches the version requirement defined by this option in the PDU definition, the field will
+  be included. Otherwise it will be skipped. 
+
+      defpdu VersionedMsg,
+        oldField: [default: 10, size: 16],
+        newerField: [size: 8, version: ">= 2.0.0"],
+
   
   """
   @spec defpdu(pduName, [{fieldName, fieldParam}]) :: none
@@ -89,21 +98,24 @@ defmodule Exgencode do
       fieldSize = props[:size]    
       case {props[:encode], props[:decode]} do
         {nil, nil} -> 
-          encodeFun = create_encode_fun(props[:type], fieldSize, props[:default])
-          decodeFun = create_decode_fun(props[:type], fieldSize, props[:default], fieldName)
+          encodeFun = create_versioned_encode(create_encode_fun(props[:type], fieldSize, props[:default]), props[:version])
+          decodeFun = create_versioned_decode(create_decode_fun(props[:type], fieldSize, props[:default], fieldName), props[:version])
           {fieldName, [{:encode, encodeFun}, {:decode, decodeFun} | props]}
         {_encodeFun, nil} -> 
           raise ArgumentError, "Cannot define custom encode without custom decode"
         {nil, _decodeFun} ->
           raise ArgumentError, "Cannot define custom decode without custom encode"
         _ ->
-          {fieldName, props}
+          encodeFun = create_versioned_encode(props[:encode], props[:version])
+          decodeFun = create_versioned_decode(props[:decode], props[:version])
+          {fieldName, Keyword.replace!(Keyword.replace!(props, :encode, encodeFun), :decode, decodeFun)}
       end
     end
     
     fieldsForEncodes = for {fieldName, props} <- fieldList do {fieldName, props[:encode]} end
     fieldsForDencodes = for {fieldName, props} <- fieldList do {fieldName, props[:decode]} end
-    
+
+    # fieldsForEncodes |> Macro.expand(__ENV__) |> Macro.to_string |> IO.puts
     quote do
       defmodule unquote(name) do
         @moduledoc false
@@ -113,30 +125,65 @@ defmodule Exgencode do
         @type t ::  %unquote(name){}
       end
 
-      defimpl Exgencode.Pdu, for: unquote(name) do
+      defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
         def sizeof(pdu, fieldName) do
           unquote(fieldList)[fieldName][:size]          
         end
 
-        def encode(pdu) do
-          for {field, encodeFun} <- unquote(fieldsForEncodes), into: <<>> do
-            encodeFun.(Map.get(pdu, field))
-          end
+        # def encode(pdu, version ) do
+        #   for {field, encodeFun} <- unquote(fieldsForEncodes), into: <<>>, do: encodeFun.(nil).(Map.get(pdu, field))
+        # end
+        
+        def encode(pdu, version) do
+          for {field, encodeFun} <- unquote(fieldsForEncodes), into: <<>>, do: encodeFun.(version).(Map.get(pdu, field))
         end
 
-        def decode(pdu, binary) do      
-          do_decode(pdu, binary, unquote(fieldsForDencodes))
+        def decode(pdu, binary, version) do      
+          do_decode(pdu, binary, unquote(fieldsForDencodes), version)
         end
 
-        defp do_decode(pdu, binary, [{field, decodeFun} | rest]) do
-          {newPdu, restBinary} = decodeFun.(pdu, binary)
-          do_decode(newPdu, restBinary, rest)
+        defp do_decode(pdu, binary, fields, version)
+        defp do_decode(pdu, binary, [{field, decodeFun} | rest], version) do
+          {newPdu, restBinary} = decodeFun.(version).(pdu, binary)
+          do_decode(newPdu, restBinary, rest, version)
         end
-        defp do_decode(pdu, restBin, []) do
+        defp do_decode(pdu, restBin, [], _) do
           {pdu, restBin}
         end
       end
     end    
+  end
+
+  defp create_versioned_encode(function, nil) do
+    quote do: fn(_) -> unquote(function) end
+  end
+  defp create_versioned_encode(function, version) do
+    quote do
+      fn(nil) -> unquote(function)
+        (ver) -> 
+          if Version.match?(ver, unquote(version)) do
+            unquote(function) 
+          else
+            fn(_) -> <<>> end
+          end
+      end
+    end
+  end
+  
+  defp create_versioned_decode(function, nil) do
+    quote do: fn(_) -> unquote(function) end
+  end
+  defp create_versioned_decode(function, version) do
+    quote do
+      fn(nil) -> unquote(function)
+        (ver) -> 
+          if Version.match?(ver, unquote(version)) do
+            unquote(function) 
+          else
+            fn(pdu, bin) -> {pdu, bin} end
+          end
+      end
+    end
   end
 
   defp create_encode_fun(:subrecord, _fieldSize, _default) do

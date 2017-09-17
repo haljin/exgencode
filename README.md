@@ -76,7 +76,7 @@ end
 
 ### Pdu Protocol
 
-`exgencode` also provides the `Exgencode.Pdu` protocol that each pdu defined with `defpdu` will automatically implement. This protocol can be used
+`exgencode` also provides the `Exgencode.Pdu.Protocol` protocol that each pdu defined with `defpdu` will automatically implement. The `Exgencode.Pdu` module can be used
 to transform between binary and structures.
 
 ```elixir
@@ -98,6 +98,38 @@ test "decoding" do
   pdu = %TestPdu.PzTestMsg{otherTestField: 100}
   binary = << 1 :: size(12), 100 :: size(24), 15 :: size(8), 10 :: size(24)>>
   assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, binary)
+end
+```
+
+### Versioning
+
+The fields can also be versioned allowing for specifications of versions of the protocol defined by the `defpdu` blocks. Both `encode/2` and `decode/3` can take the
+version number that are meant to be used to encode or decode. This allows the protocol to easily operate in backwards compatibility.
+
+```elixir
+test "versioning encode" do
+  pdu = %TestPdu.VersionedMsg{newerField: 111, evenNewerField: 7}
+  assert << 10 :: size(16), 111 :: size(8), 14 :: size(8) >> == Exgencode.Pdu.encode(pdu)
+  assert << 10 :: size(16) >> == Exgencode.Pdu.encode(pdu, "1.0.0")
+  assert << 10 :: size(16), 111 :: size(8) >> == Exgencode.Pdu.encode(pdu, "2.0.0")
+  assert << 10 :: size(16), 111 :: size(8), 14 :: size(8) >> == Exgencode.Pdu.encode(pdu, "2.1.0")
+end
+
+test "versioning decode" do
+  pdu = %TestPdu.VersionedMsg{}
+  binary = << 10 :: size(16) >>
+  assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "1.0.0")
+
+  pdu = %TestPdu.VersionedMsg{newerField: 111}
+  binary = << 10 :: size(16), 111 :: size(8) >>
+  assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "2.0.0")
+
+  pdu = %TestPdu.VersionedMsg{newerField: 111, evenNewerField: 7}
+  binary = << 10 :: size(16), 111 :: size(8), 14 :: size(8) >>
+  assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary)
+  assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "2.1.0")
+
+  assert {%TestPdu.VersionedMsg{}, << 111 :: size(8), 14 :: size(8) >>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "1.0.0")
 end
 ```
 
