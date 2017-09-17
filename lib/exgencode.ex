@@ -89,26 +89,9 @@ defmodule Exgencode do
       fieldSize = props[:size]    
       case {props[:encode], props[:decode]} do
         {nil, nil} -> 
-          customEncodeFun = 
-          case props[:type] do
-            :subrecord -> quote do fn(fieldVal) -> << Exgencode.Pdu.encode(fieldVal) :: bitstring >> end end
-            :constant -> quote do fn(_) -> << unquote(props)[:default] :: size(unquote(fieldSize)) >> end end              
-            _ -> quote do fn(fieldVal) -> << fieldVal :: size(unquote(fieldSize))>> end end
-          end  
-          customDecodeFun = 
-          case props[:type] do
-            :subrecord -> 
-              quote do fn(pdu, binary) -> 
-                {fieldValue, restBinary} = Exgencode.Pdu.decode(unquote(props)[:default], binary)
-                {Map.replace(pdu, unquote(fieldName), fieldValue), restBinary}  end end
-            :constant ->
-              defVal = props[:default]
-              quote do fn(pdu, << unquote(defVal) :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {pdu, restBinary} end end
-            _ ->
-              fieldSize = props[:size]
-              quote do fn(pdu, << fieldValue :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {struct!(pdu, %{unquote(fieldName) => fieldValue}), restBinary} end end
-          end         
-          {fieldName, [{:encode, customEncodeFun}, {:decode, customDecodeFun} | props]}
+          encodeFun = create_encode_fun(props[:type], fieldSize, props[:default])
+          decodeFun = create_decode_fun(props[:type], fieldSize, props[:default], fieldName)
+          {fieldName, [{:encode, encodeFun}, {:decode, decodeFun} | props]}
         {_encodeFun, nil} -> 
           raise ArgumentError, "Cannot define custom encode without custom decode"
         {nil, _decodeFun} ->
@@ -154,6 +137,31 @@ defmodule Exgencode do
         end
       end
     end    
+  end
+
+  defp create_encode_fun(:subrecord, _fieldSize, _default) do
+    quote do: fn(fieldVal) -> << Exgencode.Pdu.encode(fieldVal) :: bitstring >> end 
+  end
+  defp create_encode_fun(:constant, fieldSize, default) do
+    quote do: fn(_) -> << unquote(default) :: size(unquote(fieldSize)) >> end 
+  end            
+  defp create_encode_fun(_, fieldSize, _default) do
+    quote do: fn(fieldVal) -> << fieldVal :: size(unquote(fieldSize))>> end 
+  end
+
+  defp create_decode_fun(:subrecord, _fieldSize, default, fieldName) do    
+    quote do 
+      fn(pdu, binary) -> 
+        {fieldValue, restBinary} = Exgencode.Pdu.decode(unquote(default), binary)
+        {Map.replace(pdu, unquote(fieldName), fieldValue), restBinary}  
+      end 
+    end
+  end
+  defp create_decode_fun(:constant, fieldSize, default, _fieldName) do  
+    quote do: fn(pdu, << unquote(default) :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {pdu, restBinary} end 
+  end
+  defp create_decode_fun(_, fieldSize, _default, fieldName) do 
+    quote do: fn(pdu, << fieldValue :: size(unquote(fieldSize)), restBinary :: bitstring >>) -> {struct!(pdu, %{unquote(fieldName) => fieldValue}), restBinary} end 
   end
 
 end
