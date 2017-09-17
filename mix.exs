@@ -34,7 +34,7 @@ defmodule Exgencode.Mixfile do
   defp package do
     [
       name: "exgencode",
-      files: ["lib/exgencode.ex", "mix.exs", "README*", "LICENSE*"],
+      files: ["lib/exgencode.ex", "lib/pdu.ex", "mix.exs", "README*", "LICENSE*"],
       maintainers: ["Pawel Antemijczuk"],
       licenses: ["MIT License"],
       links: %{"GitHub" => "https://github.com/haljin/exgencode"}
