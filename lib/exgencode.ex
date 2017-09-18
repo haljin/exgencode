@@ -17,13 +17,15 @@ defmodule Exgencode do
   @typedoc "PDU name, must be a structure name"
   @type pduName :: module
   @typedoc "The type of the field."
-  @type fieldType :: :subrecord | :constant
+  @type fieldType :: :subrecord | :constant | :string | :binary | :float | :integer
   @typedoc "A custom encoding function that is meant to take the value of the field and return its binary represantion."
   @type fieldEncodeFun :: ((term) -> bitstring)
   @typedoc "A custom decoding function that receives the PDU decoded so far and remaining binary and is meant to return PDU with the field decoded and remaining binary."
   @type fieldDecodeFun :: ((pdu, bitstring) -> {pdu, bitstring})
+  @typedoc "The endianness the field should be encoded/decoded with"
+  @type fieldEndianness :: :big | :little | :native
   @typedoc "Parameters of the given field"
-  @type fieldParam :: {:size, non_neg_integer} | {:type, fieldType} | {:encode, fieldEncodeFun} | {:decode, fieldDecodeFun} | {:version, Version.requirement}
+  @type fieldParam :: {:size, non_neg_integer} | {:type, fieldType} | {:encode, fieldEncodeFun} | {:decode, fieldDecodeFun} | {:version, Version.requirement} | {:endianness, fieldEndianness}
   @typedoc "Name of the field."
   @type fieldName :: atom
 
@@ -51,7 +53,8 @@ defmodule Exgencode do
         aFieldWithDefault: [size: 10, default: 15]
 
   ### type
-  Defines the type of the field. Field can be of :constant or :subrecord types. If the field is meant to be a normal numerical value no type should be specified.
+  Defines the type of the field. Field can be of `:constant`, `:subrecord`, `:string`, `:binary`, `:float` and `:integer` types. 
+  If no type should is specified it will default to `:integer`. Both `:integer` and `:float` specify normal numerical values and have no special properties.
   
   #### :constant
   If the field is constant it will not become part of the Elixir structure and will not be accessible. However it will still be 
