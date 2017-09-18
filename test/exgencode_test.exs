@@ -2,6 +2,7 @@ defmodule ExgencodeTest do
   use ExUnit.Case
   alias Exgencode.TestPdu
   doctest Exgencode.Pdu
+  doctest Exgencode
 
 
   test "basic pdu definition" do
@@ -82,4 +83,50 @@ defmodule ExgencodeTest do
     pdu = %TestPdu.VersionedMsg{newerField: 111, evenNewerField: 7}
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, Exgencode.Pdu.encode(pdu, "2.1.0"), "2.1.0")
   end
+
+  test "endianness" do
+    pdu = %TestPdu.EndianMsg{} 
+    bin = << 15 :: big-size(32), 15 :: little-size(32)>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+    assert {^pdu, <<>>} = Exgencode.Pdu.decode(pdu, bin)    
+  end
+
+  
+  test "float types" do
+    pdu = %TestPdu.FloatMsg{floatField: 1.25, littleFloatField: 1.125}
+    bin = << 1.25 :: float-size(32), 1.125 :: little-float-size(64)>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+    assert {^pdu, <<>>} = Exgencode.Pdu.decode(pdu, bin)    
+  end
+  
+  test "binary types" do
+    pdu = %TestPdu.BinaryMsg{binaryField: "12characters"}
+    bin = << 10 :: size(8), "12characters" :: binary>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+    assert {^pdu, <<>>} = Exgencode.Pdu.decode(pdu, bin)    
+
+    pdu = %TestPdu.BinaryMsg{binaryField: "tooshort"}
+    assert_raise ArgumentError, fn -> Exgencode.Pdu.encode(pdu) end
+
+    pdu = %TestPdu.BinaryMsg{binaryField: "way too long for the field"}
+    bin = << 10 :: size(8), "way too long" :: binary>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+  end
+
+  test "string types" do
+    pdu = %TestPdu.StringMsg{stringField: "12characters"}
+    bin = << 10 :: size(8), "12characters" :: binary>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+    assert {^pdu, <<>>} = Exgencode.Pdu.decode(pdu, bin)    
+
+    pdu = %TestPdu.StringMsg{stringField: "Too long string for field size"}
+    bin = << 10 :: size(8), "Too long str" :: binary>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+
+    pdu = %TestPdu.StringMsg{stringField: "Too short"}
+    bin = << 10 :: size(8), "Too short" :: binary, 0, 0, 0>>
+    assert ^bin = Exgencode.Pdu.encode(pdu)
+    assert {^pdu, <<>>} = Exgencode.Pdu.decode(pdu, bin)    
+  end
+
 end

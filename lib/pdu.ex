@@ -55,7 +55,7 @@ defmodule Exgencode.Pdu do
       {%TestPdu.VersionedMsg{oldField: 10}, <<>>}
 
       iex> Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, << 10 :: size(16), 111 :: size(8) >>, "2.0.0")
-      {%TestPdu.VersionedMsg{oldField: 10, newerField: 111}, <<>>}
+      {%TestPdu.VersionedMsg{oldField: 10, newerField: 111}, <<>>} 
 
   """
   @spec decode(Exgencode.pdu, binary, Version.version) :: {Exgencode.pdu, binary}
