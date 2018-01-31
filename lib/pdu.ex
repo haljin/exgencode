@@ -34,7 +34,7 @@ defmodule Exgencode.Pdu do
       iex> Exgencode.Pdu.encode(%TestPdu.VersionedMsg{newerField: 111, evenNewerField: 7}, "2.0.0")
       << 10 :: size(16), 111 :: size(8) >>
   """
-  @spec encode(Exgencode.pdu, Version.version) :: binary
+  @spec encode(Exgencode.pdu, nil | Version.version) :: binary
   def encode(pdu, version \\ nil), do: Exgencode.Pdu.Protocol.encode(pdu, version)
 
   @doc """
@@ -58,7 +58,7 @@ defmodule Exgencode.Pdu do
       {%TestPdu.VersionedMsg{oldField: 10, newerField: 111}, <<>>} 
 
   """
-  @spec decode(Exgencode.pdu, binary, Version.version) :: {Exgencode.pdu, binary}
+  @spec decode(Exgencode.pdu, binary, nil | Version.version) :: {Exgencode.pdu, binary}
   def decode(pdu, binary, version \\ nil), do: Exgencode.Pdu.Protocol.decode(pdu, binary, version)
     
 end
