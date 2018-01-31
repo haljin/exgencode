@@ -7,13 +7,15 @@ defmodule Exgencode do
     @doc "Returns the size of the field in bits."
     def sizeof(pdu, fieldName)
     @doc "Encode the Elixir structure into a binary give the protocol version."
+    @spec encode(Exgencode.pdu, nil | Version.version) :: binary
     def encode(pdu, version)
     @doc "Decode a binary into the specified Elixir structure."
+    @spec decode(Exgencode.pdu, binary, nil | Version.version) :: {Exgencode.pdu, binary}
     def decode(pdu, binary, version)
   end
 
   @typedoc "A PDU, that is an Elixir structure representing a PDU."
-  @type pdu :: %{}
+  @type pdu :: map()
   @typedoc "PDU name, must be a structure name"
   @type pduName :: module
   @typedoc "The type of the field."
@@ -171,7 +173,7 @@ defmodule Exgencode do
 
   
   """
-  @spec defpdu(pduName, [{fieldName, fieldParam}]) :: none
+  @spec defpdu(pduName, [{fieldName, fieldParam}]) :: any
   defmacro defpdu name, originalFieldList do
     fieldList = for {fieldName, props} <- originalFieldList do
       fieldSize = props[:size]    
