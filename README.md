@@ -22,18 +22,18 @@ def deps do
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc). 
+Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc).
 The documentation can also be found at [https://hexdocs.pm/exgencode](https://hexdocs.pm/exgencode).
 
 ## Usage
 
-Protocol messages can be defined using the `defpdu` macro. Each message is defined with its name and a list of message fields 
+Protocol messages can be defined using the `defpdu` macro. Each message is defined with its name and a list of message fields
 and their options. Each field should define the size (given in bits) for the particular and can define a default value. For example:
 
 ```elixir
-defpdu ExamplePdu, 
+defpdu ExamplePdu,
   firstField: [size: 10],
-  fieldWithADefault: [size: 12, default: 5]
+  fieldWithADefault: [size: 14, default: 5]
 ```
 
 Once defined the code can use the messages as structure e.g. `%ExamplePdu{firstField: 5}`
@@ -55,8 +55,8 @@ Alternatively each field may define custom encoding and decoding functions:
 ```elixir
 defpdu CustomPdu,
   normalField: [size: 16, default: 3]
-  customField: [encode: fn(val) -> << val :: size(12) >> end,
-                decode: fn(pdu, << val :: size(12) >>) -> {struct(pdu, :customField => val), <<>>} end]
+  customField: [encode: fn(val) -> << val :: size(16) >> end,
+                decode: fn(pdu, << val :: size(16) >>) -> {struct(pdu, :customField => val), <<>>} end]
 
 ```
 
@@ -74,6 +74,8 @@ defmodule MyProtocol do
 end
 ```
 
+Please note that the total size of your PDU must be in full bytes, that is its total size in bits must be divisible by 8. Otherwise, encoding of such PDUs fails as of Elixir 1.6.0.
+
 ### Pdu Protocol
 
 `exgencode` also provides the `Exgencode.Pdu.Protocol` protocol that each pdu defined with `defpdu` will automatically implement. The `Exgencode.Pdu` module can be used
@@ -83,8 +85,8 @@ to transform between binary and structures.
 defpdu MsgSubSection,
     someField: [default: 15, size: 8]
 
-defpdu PzTestMsg, 
-  testField: [default: 1, size: 12], 
+defpdu PzTestMsg,
+  testField: [default: 1, size: 12],
   otherTestField: [size: 24],
   subSection: [default: %MsgSubSection{}, type: :subrecord],
   constField: [default: 10, size: 24, type: :constant]
@@ -134,4 +136,3 @@ end
 ```
 
 See the [documentation](https://hexdocs.pm/exgencode) for details.
-

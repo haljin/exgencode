@@ -4,11 +4,12 @@ defmodule Exgencode.Mixfile do
   def project do
     [
       app: :exgencode,
-      version: "1.1.1",
+      version: "1.2.0",
       elixir: "~> 1.5-rc",
-      start_permanent: Mix.env == :prod,
+      start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
+      docs: [extras: ["README.md"], main: "readme"],
       description: description()
     ]
   end
@@ -24,6 +25,7 @@ defmodule Exgencode.Mixfile do
   defp deps do
     [
       {:ex_doc, "~> 0.14", only: :dev, runtime: false},
+      {:credo, "~> 0.9.2", only: :dev, runtime: false},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false}
     ]
   end
