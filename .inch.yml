@@ -1,0 +1,3 @@
+files:
+  excluded:
+    - ./lib/test_pdu.ex
