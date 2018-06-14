@@ -129,8 +129,14 @@ defmodule ExgencodeTest do
 
   test "size of versioned pdu" do
     pdu = %TestPdu.VersionedMsg{}
+    nested_pdu = %TestPdu.TopPdu{}
     assert 24 == Exgencode.Pdu.sizeof_pdu(pdu, "2.0.0")
     assert 32 == Exgencode.Pdu.sizeof_pdu(pdu, "2.1.0")
     assert 32 == Exgencode.Pdu.sizeof_pdu(pdu)
+    assert 40 == Exgencode.Pdu.sizeof_pdu(nested_pdu)
+    assert 3  == Exgencode.Pdu.sizeof_pdu(pdu, "2.0.0", :bytes)
+    assert 4  == Exgencode.Pdu.sizeof_pdu(pdu, "2.1.0", :bytes)
+    assert 4  == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bytes)
+    assert 5  == Exgencode.Pdu.sizeof_pdu(nested_pdu, nil, :bytes)
   end
 end
