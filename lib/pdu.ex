@@ -9,6 +9,11 @@ defmodule Exgencode.Pdu do
   @spec sizeof(Exgencode.pdu(), atom) :: non_neg_integer
   def sizeof(pdu, fieldName), do: Exgencode.Pdu.Protocol.sizeof(pdu, fieldName)
 
+  @doc "Returns the size of the given version pdu. In case the version argument is not passed it returns full size (all fields defined within defpdu macro).
+        Does not count subrecords size."
+  @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil) :: non_neg_integer
+  def sizeof_pdu(pdu, version \\ nil), do: Exgencode.Pdu.Protocol.sizeof_pdu(pdu, version)
+
   @doc """
   Encode the Elixir structure into a binary give the protocol version.
 

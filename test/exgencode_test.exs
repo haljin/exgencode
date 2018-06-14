@@ -126,4 +126,11 @@ defmodule ExgencodeTest do
     assert ^bin = Exgencode.Pdu.encode(pdu)
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(pdu, bin)
   end
+
+  test "size of versioned pdu" do
+    pdu = %TestPdu.VersionedMsg{}
+    assert 24 == Exgencode.Pdu.sizeof_pdu(pdu, "2.0.0")
+    assert 32 == Exgencode.Pdu.sizeof_pdu(pdu, "2.1.0")
+    assert 32 == Exgencode.Pdu.sizeof_pdu(pdu)
+  end
 end

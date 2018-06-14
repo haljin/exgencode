@@ -6,6 +6,9 @@ defmodule Exgencode do
   defprotocol Pdu.Protocol do
     @doc "Returns the size of the field in bits."
     def sizeof(pdu, field_name)
+    @doc "Returns the size of the pdu for given version (does not count subrecords size)."
+    @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil) :: non_neg_integer
+    def sizeof_pdu(pdu, version)
     @doc "Encode the Elixir structure into a binary give the protocol version."
     @spec encode(Exgencode.pdu(), nil | Version.version()) :: binary
     def encode(pdu, version)
@@ -203,6 +206,19 @@ defmodule Exgencode do
           unquote(field_list)[field_name][:size]
         end
 
+        def sizeof_pdu(pdu, nil) do
+          do_size_of_pdu(unquote(original_field_list))
+        end
+
+        def sizeof_pdu(pdu, version) do
+          do_size_of_pdu(
+            Enum.filter(
+              unquote(original_field_list),
+              fn {_, props} -> props[:version] == nil || Version.match?(version, props[:version]) end
+            )
+          )
+        end
+
         def encode(pdu, version) do
           for {field, encode_fun} <- unquote(fields_for_encodes), into: <<>>, do: encode_fun.(version).(Map.get(pdu, field))
         end
@@ -220,6 +236,15 @@ defmodule Exgencode do
 
         defp do_decode(pdu, rest_bin, [], _) do
           {pdu, rest_bin}
+        end
+
+        defp do_size_of_pdu(fields) do
+          fields
+          |> Enum.map(fn {_field_name, props} ->
+            props[:size]
+          end)
+          |> Enum.filter(&(not is_nil(&1)))
+          |> Enum.sum()
         end
       end
     end
