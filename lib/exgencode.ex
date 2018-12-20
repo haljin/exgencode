@@ -7,7 +7,8 @@ defmodule Exgencode do
     @doc "Returns the size of the field in bits."
     def sizeof(pdu, field_name)
     @doc "Returns the size of the pdu for given version (does not count subrecords size)."
-    @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil, Exgencode.return_size_type()) :: non_neg_integer
+    @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil, Exgencode.return_size_type()) ::
+            non_neg_integer
     def sizeof_pdu(pdu, version, type)
     @doc "Encode the Elixir structure into a binary give the protocol version."
     @spec encode(Exgencode.pdu(), nil | Version.version()) :: binary
@@ -82,7 +83,6 @@ defmodule Exgencode do
       iex> %TestPdu.PduWithConstant{}.aConstantField
       ** (KeyError) key :aConstantField not found in: %Exgencode.TestPdu.PduWithConstant{}
 
-
   #### :subrecord
   If the field is meant to contain a sub-structure then it should be of type :subrecord. Such field must have either a default value specified that is of the
   type of the subrecord. Alternatively it must define custom decode and encode functions.
@@ -116,7 +116,6 @@ defmodule Exgencode do
       iex> Exgencode.Pdu.encode(%TestPdu.BinaryMsg{binaryField: "16charactershere"})
       << 10 :: size(8), "16charactershere" :: binary>>
 
-
   #### :string
   The `:string` type is similar to `:binary`, however it will not raise any errors if the length of the value to be encoded is different than declared field size.
   Instead, the string will be trimmed if its too long and padded with trailing 0-bytes if it is too short. Upon decoded all trailing 0-bytes will be removed.
@@ -140,7 +139,6 @@ defmodule Exgencode do
 
       iex> Exgencode.Pdu.decode(%TestPdu.StringMsg{}, << 10 :: size(8), "Too short" :: binary, 0, 0, 0, 0, 0, 0, 0>>)
       {%TestPdu.StringMsg{stringField: "Too short"}, <<>>}
-
 
   ### encode/decode
   Defines a custom encode or decode function. See type specifications for the function specification. If a PDU has a custom encode function defined it must also define
@@ -182,8 +180,8 @@ defmodule Exgencode do
       iex> Exgencode.Pdu.encode(%TestPdu.EndianMsg{})
       << 15 :: big-size(32), 15 :: little-size(32)>>
 
-
   """
+  # credo:disable-for-this-file Credo.Check.Refactor.CyclomaticComplexity
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
   defmacro defpdu name, original_field_list do
     check_pdu_size(name, original_field_list)
@@ -222,11 +220,12 @@ defmodule Exgencode do
             )
 
           do_size_of_pdu(fields, version, type)
-
         end
 
         def encode(pdu, version) do
-          for {field, encode_fun} <- unquote(fields_for_encodes), into: <<>>, do: encode_fun.(version).(Map.get(pdu, field))
+          for {field, encode_fun} <- unquote(fields_for_encodes),
+              into: <<>>,
+              do: encode_fun.(version).(Map.get(pdu, field))
         end
 
         def decode(pdu, binary, version) do
@@ -246,21 +245,19 @@ defmodule Exgencode do
 
         defp do_size_of_pdu(fields, version, type) do
           fields
-          |> Enum.map(
-            fn({field_name, props}) ->
-              if props[:type] == :subrecord do
-                Exgencode.Pdu.sizeof_pdu(props[:default], version)
-              else
-                props[:size]
-              end
+          |> Enum.map(fn {field_name, props} ->
+            if props[:type] == :subrecord do
+              Exgencode.Pdu.sizeof_pdu(props[:default], version)
+            else
+              props[:size]
             end
-          )
+          end)
           |> Enum.filter(&(not is_nil(&1)))
           |> Enum.sum()
           |> bits_or_bytes(type)
         end
 
-        defp bits_or_bytes(sum, :bits),  do: sum
+        defp bits_or_bytes(sum, :bits), do: sum
         defp bits_or_bytes(sum, :bytes), do: div(sum, 8)
       end
     end
@@ -283,23 +280,46 @@ defmodule Exgencode do
                   "Size must be defined unless a field is of type :subrecord or custom decode/encode functions are provided. Size of float must be 32 or 64."
                 )
 
-            encode_fun = create_versioned_encode(create_encode_fun(field_type, field_size, props[:default], endianness), props[:version])
+            encode_fun =
+              create_versioned_encode(
+                create_encode_fun(field_type, field_size, props[:default], endianness),
+                props[:version]
+              )
 
             decode_fun =
-              create_versioned_decode(create_decode_fun(field_type, field_size, props[:default], field_name, endianness), props[:version])
+              create_versioned_decode(
+                create_decode_fun(
+                  field_type,
+                  field_size,
+                  props[:default],
+                  field_name,
+                  endianness
+                ),
+                props[:version]
+              )
 
             {field_name, [{:encode, encode_fun}, {:decode, decode_fun} | props]}
 
           {_encode_fun, nil} ->
-            raise_argument_error(name, field_name, "Cannot define custom encode without custom decode")
+            raise_argument_error(
+              name,
+              field_name,
+              "Cannot define custom encode without custom decode"
+            )
 
           {nil, _decode_fun} ->
-            raise_argument_error(name, field_name, "Cannot define custom decode without custom encode")
+            raise_argument_error(
+              name,
+              field_name,
+              "Cannot define custom decode without custom encode"
+            )
 
           _ ->
             encode_fun = create_versioned_encode(props[:encode], props[:version])
             decode_fun = create_versioned_decode(props[:decode], props[:version])
-            {field_name, Keyword.replace!(Keyword.replace!(props, :encode, encode_fun), :decode, decode_fun)}
+
+            {field_name,
+             Keyword.replace!(Keyword.replace!(props, :encode, encode_fun), :decode, decode_fun)}
         end
       end
 
@@ -326,11 +346,17 @@ defmodule Exgencode do
       |> Enum.sum()
 
     if rem(total_size, 8) != 0,
-      do: raise(ArgumentError, "#{inspect(pdu_name |> Macro.to_string())} Total size of PDU must be divisible into full bytes!")
+      do:
+        raise(
+          ArgumentError,
+          "#{inspect(pdu_name |> Macro.to_string())} Total size of PDU must be divisible into full bytes!"
+        )
   end
 
   defp raise_argument_error(pdu_name, field_name, msg) do
-    raise ArgumentError, "Badly defined field #{inspect(field_name)} in #{inspect(pdu_name |> Macro.to_string())} - " <> msg
+    raise ArgumentError,
+          "Badly defined field #{inspect(field_name)} in #{inspect(pdu_name |> Macro.to_string())} - " <>
+            msg
   end
 
   defp valid_field?(:subrecord, _encode_fun, _size), do: true
@@ -387,7 +413,10 @@ defmodule Exgencode do
 
   defp create_encode_fun(:constant, field_size, default, endianness) do
     field_encode_type = Macro.var(endianness, __MODULE__)
-    quote do: fn _ -> <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>> end
+
+    quote do: fn _ ->
+            <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>>
+          end
   end
 
   defp create_encode_fun(:string, field_size, _default, endianness) do
@@ -405,10 +434,13 @@ defmodule Exgencode do
               binary_part(field_val, 0, unquote(field_size))
 
             byte_size(field_val) < unquote(field_size) ->
-              field_val <> for _ <- 1..(unquote(field_size) - byte_size(field_val)), into: <<>>, do: <<0>>
+              field_val <>
+                for _ <- 1..(unquote(field_size) - byte_size(field_val)), into: <<>>, do: <<0>>
           end
 
-        <<padded_field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(unquote(field_size))>>
+        <<padded_field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(
+            unquote(field_size)
+          )>>
       end
     end
   end
@@ -419,7 +451,12 @@ defmodule Exgencode do
        when sized_type == :binary do
     field_endian_type = Macro.var(endianness, __MODULE__)
     field_encode_type = Macro.var(sized_type, __MODULE__)
-    quote do: fn field_val -> <<field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(unquote(field_size))>> end
+
+    quote do: fn field_val ->
+            <<field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(
+                unquote(field_size)
+              )>>
+          end
   end
 
   defp create_decode_fun(:subrecord, _field_size, default, field_name, _endianness) do
@@ -434,7 +471,9 @@ defmodule Exgencode do
   defp create_decode_fun(:constant, field_size, default, _field_name, endianness) do
     field_encode_type = Macro.var(endianness, __MODULE__)
 
-    quote do: fn pdu, <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size)), rest_binary::bitstring>> ->
+    quote do: fn pdu,
+                 <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size)),
+                   rest_binary::bitstring>> ->
             {pdu, rest_binary}
           end
   end
@@ -444,8 +483,12 @@ defmodule Exgencode do
     field_encode_type = Macro.var(:binary, __MODULE__)
 
     quote do
-      fn pdu, <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(unquote(field_size)), rest_binary::bitstring>> ->
-        {struct!(pdu, %{unquote(field_name) => String.trim_trailing(field_value, <<0>>)}), rest_binary}
+      fn pdu,
+         <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(
+             unquote(field_size)
+           ), rest_binary::bitstring>> ->
+        {struct!(pdu, %{unquote(field_name) => String.trim_trailing(field_value, <<0>>)}),
+         rest_binary}
       end
     end
   end
@@ -458,7 +501,10 @@ defmodule Exgencode do
     field_encode_type = Macro.var(sized_type, __MODULE__)
 
     quote do
-      fn pdu, <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(unquote(field_size)), rest_binary::bitstring>> ->
+      fn pdu,
+         <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(
+             unquote(field_size)
+           ), rest_binary::bitstring>> ->
         {struct!(pdu, %{unquote(field_name) => field_value}), rest_binary}
       end
     end

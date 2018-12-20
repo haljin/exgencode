@@ -17,7 +17,9 @@ defmodule Exgencode.TestPdu do
     randomField: [size: 8],
     customField: [
       encode: fn _ -> <<6::size(8)>> end,
-      decode: fn pdu, <<_::size(8), rest::bitstring>> -> {Map.replace!(pdu, :customField, 6), rest} end
+      decode: fn pdu, <<_::size(8), rest::bitstring>> ->
+        {Map.replace!(pdu, :customField, 6), rest}
+      end
     ]
 
   defpdu VersionedMsg,
@@ -27,7 +29,9 @@ defmodule Exgencode.TestPdu do
       size: 8,
       version: ">= 2.1.0",
       encode: fn val -> <<val * 2::size(8)>> end,
-      decode: fn pdu, <<val::size(8), rest::bitstring>> -> {struct(pdu, %{evenNewerField: div(val, 2)}), rest} end
+      decode: fn pdu, <<val::size(8), rest::bitstring>> ->
+        {struct(pdu, %{evenNewerField: div(val, 2)}), rest}
+      end
     ]
 
   defpdu EndianMsg,

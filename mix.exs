@@ -24,8 +24,8 @@ defmodule Exgencode.Mixfile do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.14", only: :dev, runtime: false},
-      {:credo, "~> 0.9.2", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.19.1", only: :dev, runtime: false},
+      {:credo, "~> 1.0", only: [:dev, :test]},
       {:inch_ex, only: :docs},
       {:dialyxir, "~> 0.5", only: [:dev], runtime: false}
     ]

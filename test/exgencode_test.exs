@@ -27,7 +27,10 @@ defmodule ExgencodeTest do
   test "incorrect constant fails" do
     pdu = %TestPdu.PzTestMsg{otherTestField: 100}
     binary = <<1::size(12), 100::size(24), 15::size(8), 99::size(24)>>
-    assert_raise FunctionClauseError, fn -> {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, binary) end
+
+    assert_raise FunctionClauseError, fn ->
+      {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, binary)
+    end
   end
 
   test "custom encode" do
@@ -44,7 +47,9 @@ defmodule ExgencodeTest do
     pdu = %TestPdu.PzTestMsg{otherTestField: 100}
     custom_pdu = %TestPdu.CustomEncodeMsg{randomField: 0, customField: 6}
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.PzTestMsg{}, Exgencode.Pdu.encode(pdu))
-    assert {^custom_pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.CustomEncodeMsg{}, Exgencode.Pdu.encode(custom_pdu))
+
+    assert {^custom_pdu, <<>>} =
+             Exgencode.Pdu.decode(%TestPdu.CustomEncodeMsg{}, Exgencode.Pdu.encode(custom_pdu))
   end
 
   test "versioning encode" do
@@ -69,18 +74,37 @@ defmodule ExgencodeTest do
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary)
     assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "2.1.0")
 
-    assert {%TestPdu.VersionedMsg{}, <<111::size(8), 14::size(8)>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "1.0.0")
+    assert {%TestPdu.VersionedMsg{}, <<111::size(8), 14::size(8)>>} =
+             Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, binary, "1.0.0")
   end
 
   test "versioned encode/decode symmetry" do
     pdu = %TestPdu.VersionedMsg{}
-    assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, Exgencode.Pdu.encode(pdu, "1.0.0"), "1.0.0")
+
+    assert {^pdu, <<>>} =
+             Exgencode.Pdu.decode(
+               %TestPdu.VersionedMsg{},
+               Exgencode.Pdu.encode(pdu, "1.0.0"),
+               "1.0.0"
+             )
 
     pdu = %TestPdu.VersionedMsg{newerField: 111}
-    assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, Exgencode.Pdu.encode(pdu, "2.0.0"), "2.0.0")
+
+    assert {^pdu, <<>>} =
+             Exgencode.Pdu.decode(
+               %TestPdu.VersionedMsg{},
+               Exgencode.Pdu.encode(pdu, "2.0.0"),
+               "2.0.0"
+             )
 
     pdu = %TestPdu.VersionedMsg{newerField: 111, evenNewerField: 7}
-    assert {^pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.VersionedMsg{}, Exgencode.Pdu.encode(pdu, "2.1.0"), "2.1.0")
+
+    assert {^pdu, <<>>} =
+             Exgencode.Pdu.decode(
+               %TestPdu.VersionedMsg{},
+               Exgencode.Pdu.encode(pdu, "2.1.0"),
+               "2.1.0"
+             )
   end
 
   test "endianness" do
@@ -134,9 +158,9 @@ defmodule ExgencodeTest do
     assert 32 == Exgencode.Pdu.sizeof_pdu(pdu, "2.1.0")
     assert 32 == Exgencode.Pdu.sizeof_pdu(pdu)
     assert 40 == Exgencode.Pdu.sizeof_pdu(nested_pdu)
-    assert 3  == Exgencode.Pdu.sizeof_pdu(pdu, "2.0.0", :bytes)
-    assert 4  == Exgencode.Pdu.sizeof_pdu(pdu, "2.1.0", :bytes)
-    assert 4  == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bytes)
-    assert 5  == Exgencode.Pdu.sizeof_pdu(nested_pdu, nil, :bytes)
+    assert 3 == Exgencode.Pdu.sizeof_pdu(pdu, "2.0.0", :bytes)
+    assert 4 == Exgencode.Pdu.sizeof_pdu(pdu, "2.1.0", :bytes)
+    assert 4 == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bytes)
+    assert 5 == Exgencode.Pdu.sizeof_pdu(nested_pdu, nil, :bytes)
   end
 end
