@@ -6,6 +6,9 @@ defmodule Exgencode do
   defprotocol Pdu.Protocol do
     @doc "Returns the size of the field in bits."
     def sizeof(pdu, field_name)
+    @doc "Returns the size of the pdu for given version (does not count subrecords size)."
+    @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil, Exgencode.return_size_type()) :: non_neg_integer
+    def sizeof_pdu(pdu, version, type)
     @doc "Encode the Elixir structure into a binary give the protocol version."
     @spec encode(Exgencode.pdu(), nil | Version.version()) :: binary
     def encode(pdu, version)
@@ -36,6 +39,8 @@ defmodule Exgencode do
           | {:endianness, field_endianness}
   @typedoc "Name of the field."
   @type field_name :: atom
+  @typedoc "Desired return type of pdu size"
+  @type return_size_type :: :bits | :bytes
 
   @doc """
   This macro allows for the definition of binary PDUs in a simple way allowing for convienient encoding and decoding them between
@@ -203,6 +208,23 @@ defmodule Exgencode do
           unquote(field_list)[field_name][:size]
         end
 
+        def sizeof_pdu(pdu, nil, type) do
+          do_size_of_pdu(unquote(original_field_list), nil, type)
+        end
+
+        def sizeof_pdu(pdu, version, type) do
+          fields =
+            Enum.filter(
+              unquote(original_field_list),
+              fn {_, props} ->
+                props[:version] == nil || Version.match?(version, props[:version])
+              end
+            )
+
+          do_size_of_pdu(fields, version, type)
+
+        end
+
         def encode(pdu, version) do
           for {field, encode_fun} <- unquote(fields_for_encodes), into: <<>>, do: encode_fun.(version).(Map.get(pdu, field))
         end
@@ -221,6 +243,25 @@ defmodule Exgencode do
         defp do_decode(pdu, rest_bin, [], _) do
           {pdu, rest_bin}
         end
+
+        defp do_size_of_pdu(fields, version, type) do
+          fields
+          |> Enum.map(
+            fn({field_name, props}) ->
+              if props[:type] == :subrecord do
+                Exgencode.Pdu.sizeof_pdu(props[:default], version)
+              else
+                props[:size]
+              end
+            end
+          )
+          |> Enum.filter(&(not is_nil(&1)))
+          |> Enum.sum()
+          |> bits_or_bytes(type)
+        end
+
+        defp bits_or_bytes(sum, :bits),  do: sum
+        defp bits_or_bytes(sum, :bytes), do: div(sum, 8)
       end
     end
   end
