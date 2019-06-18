@@ -102,6 +102,22 @@ defmodule Exgencode do
       iex> Exgencode.Pdu.decode(%TestPdu.TopPdu{}, << 24 :: size(24), 1 :: size(16) >>)
       {%TestPdu.TopPdu{aField: 24, subPdu: %TestPdu.SubPdu{someField: 1}}, <<>>}
 
+  #### :virtual
+  The virtual fields are never encoded into binaries and exist only in the Elixir structs. When decoding into a struct
+  the virtual field will always assume the default value.
+
+  #### Examples:
+
+      defpdu VirtualPdu,
+        real_field: [size: 16],
+        virtual_field: [type: :virtual]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.VirtualPdu{real_field: 12, virtual_field: "Any value goes here"})
+      <<12::size(16)>>
+
+      iex> Exgencode.Pdu.decode(%TestPdu.VirtualPdu{}, <<12::size(16)>>)
+      {%TestPdu.VirtualPdu{real_field: 12, virtual_field: nil}, <<>>}
+
   #### :binary
   If the field is an arbitrary binary value it can be specified with this type. In such case the size parameter indicates size in bytes
   rather than bits. This type does not define any padding, that is the size of the binary that is contained in this field must be of at least the defined field size,
@@ -246,10 +262,15 @@ defmodule Exgencode do
         defp do_size_of_pdu(fields, version, type) do
           fields
           |> Enum.map(fn {field_name, props} ->
-            if props[:type] == :subrecord do
-              Exgencode.Pdu.sizeof_pdu(props[:default], version)
-            else
-              props[:size]
+            case props[:type] do
+              :subrecord ->
+                Exgencode.Pdu.sizeof_pdu(props[:default], version)
+
+              :virtual ->
+                0
+
+              _ ->
+                props[:size]
             end
           end)
           |> Enum.filter(&(not is_nil(&1)))
@@ -277,7 +298,7 @@ defmodule Exgencode do
                 raise_argument_error(
                   name,
                   field_name,
-                  "Size must be defined unless a field is of type :subrecord or custom decode/encode functions are provided. Size of float must be 32 or 64."
+                  "Size must be defined unless a field is of type :subrecord or :virtual or custom decode/encode functions are provided. Size of float must be 32 or 64."
                 )
 
             encode_fun =
@@ -360,6 +381,7 @@ defmodule Exgencode do
   end
 
   defp valid_field?(:subrecord, _encode_fun, _size), do: true
+  defp valid_field?(:virtual, _encode_fun, _size), do: true
   defp valid_field?(:float, nil, 32), do: true
   defp valid_field?(:float, nil, 64), do: true
   defp valid_field?(:float, nil, _), do: false
@@ -409,6 +431,10 @@ defmodule Exgencode do
 
   defp create_encode_fun(:subrecord, _field_size, _default, _endianness) do
     quote do: fn field_val -> <<Exgencode.Pdu.encode(field_val)::bitstring>> end
+  end
+
+  defp create_encode_fun(:virtual, _field_size, _default, _endianness) do
+    quote do: fn field_val -> <<>> end
   end
 
   defp create_encode_fun(:constant, field_size, default, endianness) do
@@ -464,6 +490,14 @@ defmodule Exgencode do
       fn pdu, binary ->
         {field_value, rest_binary} = Exgencode.Pdu.decode(unquote(default), binary)
         {Map.replace!(pdu, unquote(field_name), field_value), rest_binary}
+      end
+    end
+  end
+
+  defp create_decode_fun(:virtual, _field_size, default, field_name, _endianness) do
+    quote do
+      fn pdu, rest_binary ->
+        {struct!(pdu, %{unquote(field_name) => unquote(default)}), rest_binary}
       end
     end
   end
