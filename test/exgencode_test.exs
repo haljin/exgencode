@@ -163,4 +163,14 @@ defmodule ExgencodeTest do
     assert 4 == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bytes)
     assert 5 == Exgencode.Pdu.sizeof_pdu(nested_pdu, nil, :bytes)
   end
+
+  test "virtual fields" do
+    pdu = %TestPdu.VirtualPdu{real_field: 52, virtual_field: :something_whatever}
+    assert <<52::size(16)>> == Exgencode.Pdu.encode(pdu)
+
+    assert {%TestPdu.VirtualPdu{
+              real_field: 49,
+              virtual_field: nil
+            }, <<>>} == Exgencode.Pdu.decode(%TestPdu.VirtualPdu{}, <<49::size(16)>>)
+  end
 end

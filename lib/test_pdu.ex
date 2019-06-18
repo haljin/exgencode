@@ -66,4 +66,8 @@ defmodule Exgencode.TestPdu do
   defpdu TopPdu,
     aField: [size: 24],
     subPdu: [type: :subrecord, default: %SubPdu{}]
+
+  defpdu VirtualPdu,
+    real_field: [size: 16],
+    virtual_field: [type: :virtual]
 end
