@@ -8,7 +8,7 @@ defmodule Exgencode do
     def sizeof(pdu, field_name)
     @doc "Returns the size of the pdu for given version (does not count subrecords size)."
     @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil, Exgencode.return_size_type()) ::
-            non_neg_integer
+            non_neg_integer | {:subrecord, Exgencode.pdu()}
     def sizeof_pdu(pdu, version, type)
     @doc "Encode the Elixir structure into a binary give the protocol version."
     @spec encode(Exgencode.pdu(), nil | Version.version()) :: binary
@@ -19,7 +19,7 @@ defmodule Exgencode do
   end
 
   @typedoc "A PDU, that is an Elixir structure representing a PDU."
-  @type pdu :: map()
+  @type pdu :: struct
   @typedoc "PDU name, must be a structure name"
   @type pdu_name :: module
   @typedoc "The type of the field."
@@ -197,46 +197,33 @@ defmodule Exgencode do
       << 15 :: big-size(32), 15 :: little-size(32)>>
 
   """
-  # credo:disable-for-this-file Credo.Check.Refactor.CyclomaticComplexity
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
   defmacro defpdu name, original_field_list do
     check_pdu_size(name, original_field_list)
 
     {field_list, fields_for_encodes, fields_for_decodes} = map_fields(name, original_field_list)
 
+    struct_fields =
+      for {field_name, props} <- field_list, props[:type] != :constant do
+        {field_name, props[:default]}
+      end
+
+    sizeofs = Exgencode.Sizeof.build_sizeof(field_list)
+    sizeof_pdus = Exgencode.Sizeof.build_sizeof_pdu(field_list)
+
+    # out =
     quote do
       defmodule unquote(name) do
         @moduledoc false
-        fields =
-          for {field_name, props} <- unquote(field_list), props[:type] != :constant do
-            {field_name, props[:default]}
-          end
 
-        defstruct fields
+        defstruct unquote(struct_fields)
 
         @type t :: %unquote(name){}
       end
 
       defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
-        def sizeof(pdu, field_name) do
-          unquote(field_list)[field_name][:size]
-        end
-
-        def sizeof_pdu(pdu, nil, type) do
-          do_size_of_pdu(unquote(original_field_list), nil, type)
-        end
-
-        def sizeof_pdu(pdu, version, type) do
-          fields =
-            Enum.filter(
-              unquote(original_field_list),
-              fn {_, props} ->
-                props[:version] == nil || Version.match?(version, props[:version])
-              end
-            )
-
-          do_size_of_pdu(fields, version, type)
-        end
+        unquote(sizeofs)
+        unquote(sizeof_pdus)
 
         def encode(pdu, version) do
           for {field, encode_fun} <- unquote(fields_for_encodes),
@@ -258,30 +245,11 @@ defmodule Exgencode do
         defp do_decode(pdu, rest_bin, [], _) do
           {pdu, rest_bin}
         end
-
-        defp do_size_of_pdu(fields, version, type) do
-          fields
-          |> Enum.map(fn {field_name, props} ->
-            case props[:type] do
-              :subrecord ->
-                Exgencode.Pdu.sizeof_pdu(props[:default], version)
-
-              :virtual ->
-                0
-
-              _ ->
-                props[:size]
-            end
-          end)
-          |> Enum.filter(&(not is_nil(&1)))
-          |> Enum.sum()
-          |> bits_or_bytes(type)
-        end
-
-        defp bits_or_bytes(sum, :bits), do: sum
-        defp bits_or_bytes(sum, :bytes), do: div(sum, 8)
       end
     end
+
+    # File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
+    # out
   end
 
   defp map_fields(name, original_field_list) do
@@ -293,7 +261,7 @@ defmodule Exgencode do
 
         case {props[:encode], props[:decode]} do
           {nil, nil} ->
-            unless valid_field?(field_type, props[:encode], field_size),
+            unless valid_field_size?(field_type, props[:encode], field_size),
               do:
                 raise_argument_error(
                   name,
@@ -302,14 +270,19 @@ defmodule Exgencode do
                 )
 
             encode_fun =
-              create_versioned_encode(
-                create_encode_fun(field_type, field_size, props[:default], endianness),
+              Exgencode.EncodeDecode.create_versioned_encode(
+                Exgencode.EncodeDecode.create_encode_fun(
+                  field_type,
+                  field_size,
+                  props[:default],
+                  endianness
+                ),
                 props[:version]
               )
 
             decode_fun =
-              create_versioned_decode(
-                create_decode_fun(
+              Exgencode.EncodeDecode.create_versioned_decode(
+                Exgencode.EncodeDecode.create_decode_fun(
                   field_type,
                   field_size,
                   props[:default],
@@ -336,11 +309,16 @@ defmodule Exgencode do
             )
 
           _ ->
-            encode_fun = create_versioned_encode(props[:encode], props[:version])
-            decode_fun = create_versioned_decode(props[:decode], props[:version])
+            encode_fun =
+              Exgencode.EncodeDecode.create_versioned_encode(props[:encode], props[:version])
+
+            decode_fun =
+              Exgencode.EncodeDecode.create_versioned_decode(props[:decode], props[:version])
 
             {field_name,
-             Keyword.replace!(Keyword.replace!(props, :encode, encode_fun), :decode, decode_fun)}
+             props
+             |> Keyword.replace!(:encode, encode_fun)
+             |> Keyword.replace!(:decode, decode_fun)}
         end
       end
 
@@ -380,167 +358,12 @@ defmodule Exgencode do
             msg
   end
 
-  defp valid_field?(:subrecord, _encode_fun, _size), do: true
-  defp valid_field?(:virtual, _encode_fun, _size), do: true
-  defp valid_field?(:float, nil, 32), do: true
-  defp valid_field?(:float, nil, 64), do: true
-  defp valid_field?(:float, nil, _), do: false
-  defp valid_field?(_other_type, encode_fun, _size) when not is_nil(encode_fun), do: true
-  defp valid_field?(_other_type, _encode_fun, size) when is_integer(size), do: true
-  defp valid_field?(_, _, _), do: false
-
-  defp create_versioned_encode(function, nil) do
-    quote do: fn _ -> unquote(function) end
-  end
-
-  defp create_versioned_encode(function, version) do
-    quote do
-      fn
-        nil ->
-          unquote(function)
-
-        ver ->
-          if Version.match?(ver, unquote(version)) do
-            unquote(function)
-          else
-            fn _ -> <<>> end
-          end
-      end
-    end
-  end
-
-  defp create_versioned_decode(function, nil) do
-    quote do: fn _ -> unquote(function) end
-  end
-
-  defp create_versioned_decode(function, version) do
-    quote do
-      fn
-        nil ->
-          unquote(function)
-
-        ver ->
-          if Version.match?(ver, unquote(version)) do
-            unquote(function)
-          else
-            fn pdu, bin -> {pdu, bin} end
-          end
-      end
-    end
-  end
-
-  defp create_encode_fun(:subrecord, _field_size, _default, _endianness) do
-    quote do: fn field_val -> <<Exgencode.Pdu.encode(field_val)::bitstring>> end
-  end
-
-  defp create_encode_fun(:virtual, _field_size, _default, _endianness) do
-    quote do: fn field_val -> <<>> end
-  end
-
-  defp create_encode_fun(:constant, field_size, default, endianness) do
-    field_encode_type = Macro.var(endianness, __MODULE__)
-
-    quote do: fn _ ->
-            <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>>
-          end
-  end
-
-  defp create_encode_fun(:string, field_size, _default, endianness) do
-    field_endian_type = Macro.var(endianness, __MODULE__)
-    field_encode_type = Macro.var(:binary, __MODULE__)
-
-    quote do
-      fn field_val ->
-        padded_field_val =
-          cond do
-            byte_size(field_val) == unquote(field_size) ->
-              field_val
-
-            byte_size(field_val) > unquote(field_size) ->
-              binary_part(field_val, 0, unquote(field_size))
-
-            byte_size(field_val) < unquote(field_size) ->
-              field_val <>
-                for _ <- 1..(unquote(field_size) - byte_size(field_val)), into: <<>>, do: <<0>>
-          end
-
-        <<padded_field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(
-            unquote(field_size)
-          )>>
-      end
-    end
-  end
-
-  defp create_encode_fun(sized_type, field_size, _default, endianness)
-       when sized_type == :integer
-       when sized_type == :float
-       when sized_type == :binary do
-    field_endian_type = Macro.var(endianness, __MODULE__)
-    field_encode_type = Macro.var(sized_type, __MODULE__)
-
-    quote do: fn field_val ->
-            <<field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(
-                unquote(field_size)
-              )>>
-          end
-  end
-
-  defp create_decode_fun(:subrecord, _field_size, default, field_name, _endianness) do
-    quote do
-      fn pdu, binary ->
-        {field_value, rest_binary} = Exgencode.Pdu.decode(unquote(default), binary)
-        {Map.replace!(pdu, unquote(field_name), field_value), rest_binary}
-      end
-    end
-  end
-
-  defp create_decode_fun(:virtual, _field_size, default, field_name, _endianness) do
-    quote do
-      fn pdu, rest_binary ->
-        {struct!(pdu, %{unquote(field_name) => unquote(default)}), rest_binary}
-      end
-    end
-  end
-
-  defp create_decode_fun(:constant, field_size, default, _field_name, endianness) do
-    field_encode_type = Macro.var(endianness, __MODULE__)
-
-    quote do: fn pdu,
-                 <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size)),
-                   rest_binary::bitstring>> ->
-            {pdu, rest_binary}
-          end
-  end
-
-  defp create_decode_fun(:string, field_size, _default, field_name, endianness) do
-    field_endian_type = Macro.var(endianness, __MODULE__)
-    field_encode_type = Macro.var(:binary, __MODULE__)
-
-    quote do
-      fn pdu,
-         <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(
-             unquote(field_size)
-           ), rest_binary::bitstring>> ->
-        {struct!(pdu, %{unquote(field_name) => String.trim_trailing(field_value, <<0>>)}),
-         rest_binary}
-      end
-    end
-  end
-
-  defp create_decode_fun(sized_type, field_size, _default, field_name, endianness)
-       when sized_type == :integer
-       when sized_type == :float
-       when sized_type == :binary do
-    field_endian_type = Macro.var(endianness, __MODULE__)
-    field_encode_type = Macro.var(sized_type, __MODULE__)
-
-    quote do
-      fn pdu,
-         <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(
-             unquote(field_size)
-           ), rest_binary::bitstring>> ->
-        {struct!(pdu, %{unquote(field_name) => field_value}), rest_binary}
-      end
-    end
-  end
+  defp valid_field_size?(:subrecord, _encode_fun, _size), do: true
+  defp valid_field_size?(:virtual, _encode_fun, _size), do: true
+  defp valid_field_size?(:float, nil, 32), do: true
+  defp valid_field_size?(:float, nil, 64), do: true
+  defp valid_field_size?(:float, nil, _), do: false
+  defp valid_field_size?(_other_type, encode_fun, _size) when not is_nil(encode_fun), do: true
+  defp valid_field_size?(_other_type, _encode_fun, size) when is_integer(size), do: true
+  defp valid_field_size?(_, _, _), do: false
 end

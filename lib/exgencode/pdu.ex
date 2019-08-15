@@ -5,7 +5,7 @@ defmodule Exgencode.Pdu do
   """
 
   @doc "Returns the size of the field in bits."
-  @spec sizeof(Exgencode.pdu(), atom) :: non_neg_integer
+  @spec sizeof(Exgencode.pdu(), atom) :: non_neg_integer | {:subrecord, Exgencode.pdu()}
   def sizeof(pdu, fieldName), do: Exgencode.Pdu.Protocol.sizeof(pdu, fieldName)
 
   @doc "Returns the size of the given version pdu. In case the version argument is not passed it returns full size (all fields defined within defpdu macro).
