@@ -245,43 +245,43 @@ defmodule Exgencode do
         {field_name, props[:default]}
       end
 
-    out =
-      quote do
-        defmodule unquote(name) do
-          @moduledoc false
+    # out =
+    quote do
+      defmodule unquote(name) do
+        @moduledoc false
 
-          defstruct unquote(struct_fields)
+        defstruct unquote(struct_fields)
 
-          @type t :: %unquote(name){}
-        end
-
-        defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
-          unquote(Exgencode.Sizeof.build_sizeof(field_list))
-          unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
-
-          def encode(pdu, version) do
-            for {field, encode_fun} <- unquote(fields_for_encodes),
-                into: <<>>,
-                do: encode_fun.(version).(pdu)
-          end
-
-          def decode(pdu, binary, version) do
-            do_decode(pdu, binary, unquote(fields_for_decodes), version)
-          end
-
-          defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
-            {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
-            do_decode(new_pdu, rest_binary, rest, version)
-          end
-
-          defp do_decode(pdu, rest_bin, [], _) do
-            {pdu, rest_bin}
-          end
-        end
+        @type t :: %unquote(name){}
       end
 
-    File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
-    out
+      defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
+        unquote(Exgencode.Sizeof.build_sizeof(field_list))
+        unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
+
+        def encode(pdu, version) do
+          for {field, encode_fun} <- unquote(fields_for_encodes),
+              into: <<>>,
+              do: encode_fun.(version).(pdu)
+        end
+
+        def decode(pdu, binary, version) do
+          do_decode(pdu, binary, unquote(fields_for_decodes), version)
+        end
+
+        defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
+          {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
+          do_decode(new_pdu, rest_binary, rest, version)
+        end
+
+        defp do_decode(pdu, rest_bin, [], _) do
+          {pdu, rest_bin}
+        end
+      end
+    end
+
+    # File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
+    # out
   end
 
   defp map_fields(name, original_field_list) do
