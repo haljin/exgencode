@@ -204,84 +204,57 @@ defmodule Exgencode do
 
     {field_list, fields_for_encodes, fields_for_decodes} = map_fields(name, original_field_list)
 
-    quote do
-      defmodule unquote(name) do
-        @moduledoc false
-        fields =
-          for {field_name, props} <- unquote(field_list), props[:type] != :constant do
-            {field_name, props[:default]}
+    fields =
+      for {field_name, props} <- field_list, props[:type] != :constant do
+        {field_name, props[:default]}
+      end
+
+    sizeofs = Exgencode.Sizeof.build_sizeof(field_list)
+    sizeof_pdus = Exgencode.Sizeof.build_sizeof_pdu(field_list)
+
+    out =
+      quote do
+        defmodule unquote(name) do
+          @moduledoc false
+
+          defstruct unquote(fields)
+
+          @type t :: %unquote(name){}
+        end
+
+        defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
+          unquote(sizeofs)
+          unquote(sizeof_pdus)
+
+
+          def encode(pdu, version) do
+            for {field, encode_fun} <- unquote(fields_for_encodes),
+                into: <<>>,
+                do: encode_fun.(version).(Map.get(pdu, field))
           end
 
-        defstruct fields
+          def decode(pdu, binary, version) do
+            do_decode(pdu, binary, unquote(fields_for_decodes), version)
+          end
 
-        @type t :: %unquote(name){}
+          defp do_decode(pdu, binary, fields, version)
+
+          defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
+            {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
+            do_decode(new_pdu, rest_binary, rest, version)
+          end
+
+          defp do_decode(pdu, rest_bin, [], _) do
+            {pdu, rest_bin}
+          end
+        end
       end
 
-      defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
-        def sizeof(pdu, field_name) do
-          unquote(field_list)[field_name][:size]
-        end
+    # if Macro.to_string(name) in ["PzTestMsg", "VirtualPdu", "MsgSubSection"],
+    #   do:
+    File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
 
-        def sizeof_pdu(pdu, nil, type) do
-          do_size_of_pdu(unquote(original_field_list), nil, type)
-        end
-
-        def sizeof_pdu(pdu, version, type) do
-          fields =
-            Enum.filter(
-              unquote(original_field_list),
-              fn {_, props} ->
-                props[:version] == nil || Version.match?(version, props[:version])
-              end
-            )
-
-          do_size_of_pdu(fields, version, type)
-        end
-
-        def encode(pdu, version) do
-          for {field, encode_fun} <- unquote(fields_for_encodes),
-              into: <<>>,
-              do: encode_fun.(version).(Map.get(pdu, field))
-        end
-
-        def decode(pdu, binary, version) do
-          do_decode(pdu, binary, unquote(fields_for_decodes), version)
-        end
-
-        defp do_decode(pdu, binary, fields, version)
-
-        defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
-          {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
-          do_decode(new_pdu, rest_binary, rest, version)
-        end
-
-        defp do_decode(pdu, rest_bin, [], _) do
-          {pdu, rest_bin}
-        end
-
-        defp do_size_of_pdu(fields, version, type) do
-          fields
-          |> Enum.map(fn {field_name, props} ->
-            case props[:type] do
-              :subrecord ->
-                Exgencode.Pdu.sizeof_pdu(props[:default], version)
-
-              :virtual ->
-                0
-
-              _ ->
-                props[:size]
-            end
-          end)
-          |> Enum.filter(&(not is_nil(&1)))
-          |> Enum.sum()
-          |> bits_or_bytes(type)
-        end
-
-        defp bits_or_bytes(sum, :bits), do: sum
-        defp bits_or_bytes(sum, :bytes), do: div(sum, 8)
-      end
-    end
+    out
   end
 
   defp map_fields(name, original_field_list) do
