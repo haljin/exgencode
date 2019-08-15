@@ -131,6 +131,25 @@ defmodule Exgencode do
   rather than bits. This type does not define any padding, that is the size of the binary that is contained in this field must be of at least the defined field size,
   otherwise an `ArgumentError` is raised. If the size is larger the binary will be trimmed.
 
+  #### :variable
+  Variable fields have no pre-defined size, instead the size is defined by the value of another field. When defining a `:variable` field, the
+  `:size` parameter must be set to the name of the field definining the size, which in turn should be an `:integer` field. The size in that case
+  can only be specified in bytes. All `:variable` fields are binary fields.
+
+  #### Examples:
+      defpdu VariablePdu,
+        some_field: [size: 16],
+        size_field: [size: 16],
+        variable_field: [type: :variable, size: :size_field]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.VariablePdu{some_field: 52, size_field: 2, variable_field: "AB"})
+      <<52::size(16), 2::size(16), "A", "B">>
+
+      iex> Exgencode.Pdu.decode(%TestPdu.VariablePdu{}, <<52::size(16), 2::size(16), "A", "B">>)
+      {%TestPdu.VariablePdu{some_field: 52, size_field: 2, variable_field: "AB"}, <<>>}
+
+  Note that the field defining the size must be defined before the variable length field.
+
   #### Examples:
 
       defpdu BinaryMsg,
