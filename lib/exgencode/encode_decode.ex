@@ -43,15 +43,17 @@ defmodule Exgencode.EncodeDecode do
     end
   end
 
-  def create_encode_fun(:subrecord, _field_size, _default, _endianness) do
-    quote do: fn field_val -> <<Exgencode.Pdu.encode(field_val)::bitstring>> end
+  def create_encode_fun(:subrecord, field_name, _field_size, _default, _endianness) do
+    quote do: fn %{unquote(field_name) => field_val} ->
+            <<Exgencode.Pdu.encode(field_val)::bitstring>>
+          end
   end
 
-  def create_encode_fun(:virtual, _field_size, _default, _endianness) do
-    quote do: fn field_val -> <<>> end
+  def create_encode_fun(:virtual, _field_name, _field_size, _default, _endianness) do
+    quote do: fn _ -> <<>> end
   end
 
-  def create_encode_fun(:constant, field_size, default, endianness) do
+  def create_encode_fun(:constant, _field_name, field_size, default, endianness) do
     field_encode_type = Macro.var(endianness, __MODULE__)
 
     quote do: fn _ ->
@@ -59,12 +61,12 @@ defmodule Exgencode.EncodeDecode do
           end
   end
 
-  def create_encode_fun(:string, field_size, _default, endianness) do
+  def create_encode_fun(:string, field_name, field_size, _default, endianness) do
     field_endian_type = Macro.var(endianness, __MODULE__)
     field_encode_type = Macro.var(:binary, __MODULE__)
 
     quote do
-      fn field_val ->
+      fn %{unquote(field_name) => field_val} ->
         padded_field_val =
           cond do
             byte_size(field_val) == unquote(field_size) ->
@@ -85,18 +87,35 @@ defmodule Exgencode.EncodeDecode do
     end
   end
 
-  def create_encode_fun(sized_type, field_size, _default, endianness)
+  def create_encode_fun(sized_type, field_name, field_size, _default, endianness)
       when sized_type == :integer
       when sized_type == :float
       when sized_type == :binary do
     field_endian_type = Macro.var(endianness, __MODULE__)
     field_encode_type = Macro.var(sized_type, __MODULE__)
 
-    quote do: fn field_val ->
+    quote do: fn %{unquote(field_name) => field_val} ->
             <<field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(
                 unquote(field_size)
               )>>
           end
+  end
+
+  def create_encode_fun(:variable, field_name, field_size, _default, endianness) do
+    field_endian_type = Macro.var(endianness, __MODULE__)
+    field_encode_type = Macro.var(:binary, __MODULE__)
+
+    quote do: fn %{unquote(field_name) => field_val, unquote(field_size) => size_val} ->
+            <<field_val::unquote(field_endian_type)-unquote(field_encode_type)-size(size_val)>>
+          end
+  end
+
+  def wrap_custom_encode(field_name, encode_fun) do
+    quote do
+      fn pdu ->
+        unquote(encode_fun).(Map.get(pdu, unquote(field_name)))
+      end
+    end
   end
 
   def create_decode_fun(:subrecord, _field_size, default, field_name, _endianness) do
@@ -153,6 +172,20 @@ defmodule Exgencode.EncodeDecode do
          <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(
              unquote(field_size)
            ), rest_binary::bitstring>> ->
+        {struct!(pdu, %{unquote(field_name) => field_value}), rest_binary}
+      end
+    end
+  end
+
+  def create_decode_fun(:variable, field_size, _default, field_name, endianness) do
+    field_endian_type = Macro.var(endianness, __MODULE__)
+    field_encode_type = Macro.var(:binary, __MODULE__)
+
+    quote do
+      fn %{unquote(field_size) => size_val} = pdu, bin ->
+        <<field_value::unquote(field_endian_type)-unquote(field_encode_type)-size(size_val),
+          rest_binary::bitstring>> = bin
+
         {struct!(pdu, %{unquote(field_name) => field_value}), rest_binary}
       end
     end

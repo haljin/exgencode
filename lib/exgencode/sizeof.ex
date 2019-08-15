@@ -7,6 +7,9 @@ defmodule Exgencode.Sizeof do
     field_list
     |> Enum.map(fn {name, props} ->
       case props[:type] do
+        :variable ->
+          {name, 0}
+
         :virtual ->
           {name, 0}
 
