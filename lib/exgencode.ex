@@ -8,7 +8,7 @@ defmodule Exgencode do
     def sizeof(pdu, field_name)
     @doc "Returns the size of the pdu for given version (does not count subrecords size)."
     @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil, Exgencode.return_size_type()) ::
-            non_neg_integer
+            non_neg_integer | {:subrecord, Exgencode.pdu()}
     def sizeof_pdu(pdu, version, type)
     @doc "Encode the Elixir structure into a binary give the protocol version."
     @spec encode(Exgencode.pdu(), nil | Version.version()) :: binary
@@ -19,7 +19,7 @@ defmodule Exgencode do
   end
 
   @typedoc "A PDU, that is an Elixir structure representing a PDU."
-  @type pdu :: map()
+  @type pdu :: struct
   @typedoc "PDU name, must be a structure name"
   @type pdu_name :: module
   @typedoc "The type of the field."
@@ -197,7 +197,6 @@ defmodule Exgencode do
       << 15 :: big-size(32), 15 :: little-size(32)>>
 
   """
-  # credo:disable-for-this-file Credo.Check.Refactor.CyclomaticComplexity
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
   defmacro defpdu name, original_field_list do
     check_pdu_size(name, original_field_list)
@@ -249,10 +248,7 @@ defmodule Exgencode do
       end
     end
 
-    # if Macro.to_string(name) in ["PzTestMsg", "VirtualPdu", "MsgSubSection"],
-    #   do:
     # File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
-
     # out
   end
 
