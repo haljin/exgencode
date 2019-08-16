@@ -23,7 +23,8 @@ defmodule Exgencode do
   @typedoc "PDU name, must be a structure name"
   @type pdu_name :: module
   @typedoc "The type of the field."
-  @type field_type :: :subrecord | :constant | :string | :binary | :float | :integer
+  @type field_type ::
+          :subrecord | :constant | :string | :binary | :float | :integer | :variable | :offset
   @typedoc "A custom encoding function that is meant to take the value of the field and return its binary represantion."
   @type field_encode_fun :: (term -> bitstring)
   @typedoc "A custom decoding function that receives the PDU decoded so far and remaining binary and is meant to return PDU with the field decoded and remaining binary."
@@ -32,12 +33,13 @@ defmodule Exgencode do
   @type field_endianness :: :big | :little | :native
   @typedoc "Parameters of the given field"
   @type fieldParam ::
-          {:size, non_neg_integer}
+          {:size, non_neg_integer | field_name}
           | {:type, field_type}
           | {:encode, field_encode_fun}
           | {:decode, field_decode_fun}
           | {:version, Version.requirement()}
           | {:endianness, field_endianness}
+          | {:conditional, field_name}
   @typedoc "Name of the field."
   @type field_name :: atom
   @typedoc "Desired return type of pdu size"
@@ -245,54 +247,59 @@ defmodule Exgencode do
         {field_name, props[:default]}
       end
 
-    # out =
-    quote do
-      defmodule unquote(name) do
-        @moduledoc false
+    out =
+      quote do
+        defmodule unquote(name) do
+          @moduledoc false
 
-        defstruct unquote(struct_fields)
+          defstruct unquote(struct_fields)
 
-        @type t :: %unquote(name){}
+          @type t :: %unquote(name){}
+        end
+
+        defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
+          unquote(Exgencode.Sizeof.build_sizeof(field_list))
+          unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
+
+          def encode(pdu, version) do
+            for {field, encode_fun} <- unquote(fields_for_encodes),
+                into: <<>>,
+                do: encode_fun.(version).(pdu)
+          end
+
+          def decode(pdu, binary, version) do
+            do_decode(pdu, binary, unquote(fields_for_decodes), version)
+          end
+
+          defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
+            {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
+            do_decode(new_pdu, rest_binary, rest, version)
+          end
+
+          defp do_decode(pdu, rest_bin, [], _) do
+            {pdu, rest_bin}
+          end
+        end
       end
 
-      defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
-        unquote(Exgencode.Sizeof.build_sizeof(field_list))
-        unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
-
-        def encode(pdu, version) do
-          for {field, encode_fun} <- unquote(fields_for_encodes),
-              into: <<>>,
-              do: encode_fun.(version).(pdu)
-        end
-
-        def decode(pdu, binary, version) do
-          do_decode(pdu, binary, unquote(fields_for_decodes), version)
-        end
-
-        defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
-          {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
-          do_decode(new_pdu, rest_binary, rest, version)
-        end
-
-        defp do_decode(pdu, rest_bin, [], _) do
-          {pdu, rest_bin}
-        end
-      end
-    end
-
-    # File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
-    # out
+    File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
+    out
   end
 
   defp map_fields(name, original_field_list) do
-    for {field_name, props} <- original_field_list do
+    for {field_name, original_props} <- original_field_list do
+      props =
+        Keyword.merge(
+          [endianness: :big, type: :integer, conditional: nil, encode: nil, decode: nil],
+          original_props
+        )
+
       field_size = props[:size]
-      endianness = Access.get(props, :endianness, :big)
-      field_type = Access.get(props, :type, :integer)
+      field_type = props[:type]
 
       case {props[:encode], props[:decode]} do
         {nil, nil} ->
-          unless valid_field_size?(field_type, props[:encode], field_size),
+          unless valid_field_size?(field_type, field_size),
             do:
               raise_argument_error(
                 name,
@@ -305,9 +312,7 @@ defmodule Exgencode do
               Exgencode.EncodeDecode.create_encode_fun(
                 field_type,
                 field_name,
-                field_size,
-                props[:default],
-                endianness
+                props
               ),
               props[:version]
             )
@@ -316,10 +321,8 @@ defmodule Exgencode do
             Exgencode.EncodeDecode.create_versioned_decode(
               Exgencode.EncodeDecode.create_decode_fun(
                 field_type,
-                field_size,
-                props[:default],
                 field_name,
-                endianness
+                props
               ),
               props[:version]
             )
@@ -382,14 +385,13 @@ defmodule Exgencode do
             msg
   end
 
-  defp valid_field_size?(:subrecord, _encode_fun, _size), do: true
-  defp valid_field_size?(:virtual, _encode_fun, _size), do: true
-  defp valid_field_size?(:float, nil, 32), do: true
-  defp valid_field_size?(:float, nil, 64), do: true
-  defp valid_field_size?(:float, nil, _), do: false
-  defp valid_field_size?(:variable, nil, name) when is_atom(name), do: true
-  defp valid_field_size?(:variable, nil, _name), do: false
-  defp valid_field_size?(_other_type, encode_fun, _size) when not is_nil(encode_fun), do: true
-  defp valid_field_size?(_other_type, _encode_fun, size) when is_integer(size), do: true
-  defp valid_field_size?(_, _, _), do: false
+  defp valid_field_size?(:subrecord, _size), do: true
+  defp valid_field_size?(:virtual, _size), do: true
+  defp valid_field_size?(:float, 32), do: true
+  defp valid_field_size?(:float, 64), do: true
+  defp valid_field_size?(:float, _), do: false
+  defp valid_field_size?(:variable, name) when is_atom(name), do: true
+  defp valid_field_size?(:variable, _name), do: false
+  defp valid_field_size?(_other_type, size) when is_integer(size), do: true
+  defp valid_field_size?(_, _), do: false
 end

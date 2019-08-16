@@ -81,4 +81,13 @@ defmodule Exgencode.TestPdu do
     size_field: [size: 16],
     variable_field: [type: :variable, size: :size_field],
     trailing_field: [size: 8]
+
+  defpdu ConditionalPdu,
+    normal_field: [size: 16],
+    flag_field: [size: 8],
+    conditional_field: [size: 8, conditional: :flag_field],
+    another_normal_field: [size: 8],
+    second_flag: [size: 8],
+    size_field: [size: 16, conditional: :second_flag],
+    conditional_variable_field: [type: :variable, size: :size_field, conditional: :second_flag]
 end

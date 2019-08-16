@@ -255,4 +255,108 @@ defmodule ExgencodeTest do
     assert bit_size(variable_val) == Exgencode.Pdu.sizeof(pdu, :variable_field)
     assert 16 + 16 + bit_size(variable_val) + 8 == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bits)
   end
+
+  test "conditional fields" do
+    variable_val = "This is just a test."
+
+    pdu = %TestPdu.ConditionalPdu{
+      normal_field: 12,
+      flag_field: 1,
+      conditional_field: 10,
+      another_normal_field: 200,
+      second_flag: 1,
+      size_field: byte_size(variable_val),
+      conditional_variable_field: variable_val
+    }
+
+    assert <<12::size(16), 1, 10, 200, 1, byte_size(variable_val)::size(16)>> <> variable_val ==
+             Exgencode.Pdu.encode(pdu)
+
+    assert {pdu, <<>>} ==
+             Exgencode.Pdu.decode(
+               pdu,
+               <<12::size(16), 1, 10, 200, 1, byte_size(variable_val)::size(16)>> <> variable_val
+             )
+
+    pdu2 = %TestPdu.ConditionalPdu{
+      normal_field: 12,
+      flag_field: 0,
+      another_normal_field: 200,
+      second_flag: 1,
+      size_field: byte_size(variable_val),
+      conditional_variable_field: variable_val
+    }
+
+    assert <<12::size(16), 0, 200, 1, byte_size(variable_val)::size(16)>> <> variable_val ==
+             Exgencode.Pdu.encode(pdu2)
+
+    assert {pdu2, <<>>} ==
+             Exgencode.Pdu.decode(
+               pdu2,
+               <<12::size(16), 0, 200, 1, byte_size(variable_val)::size(16)>> <> variable_val
+             )
+
+    pdu3 = %TestPdu.ConditionalPdu{
+      normal_field: 12,
+      flag_field: 0,
+      another_normal_field: 200,
+      second_flag: 0
+    }
+
+    assert <<12::size(16), 0, 200, 0>> ==
+             Exgencode.Pdu.encode(pdu3)
+
+    assert {pdu3, <<>>} ==
+             Exgencode.Pdu.decode(
+               pdu3,
+               <<12::size(16), 0, 200, 0>>
+             )
+  end
+
+  test "sizeof conditional fields" do
+    variable_val = "This is just a test."
+
+    pdu = %TestPdu.ConditionalPdu{
+      normal_field: 12,
+      flag_field: 1,
+      conditional_field: 10,
+      another_normal_field: 200,
+      second_flag: 1,
+      size_field: byte_size(variable_val),
+      conditional_variable_field: variable_val
+    }
+
+    assert 8 == Exgencode.Pdu.sizeof(pdu, :conditional_field)
+
+    assert 16 + 8 + 8 + 8 + 8 + 16 + bit_size(variable_val) ==
+             Exgencode.Pdu.sizeof_pdu(pdu, nil, :bits)
+
+    pdu2 = %TestPdu.ConditionalPdu{
+      normal_field: 12,
+      flag_field: 0,
+      another_normal_field: 200,
+      second_flag: 1,
+      size_field: byte_size(variable_val),
+      conditional_variable_field: variable_val
+    }
+
+    assert 0 == Exgencode.Pdu.sizeof(pdu2, :conditional_field)
+    assert bit_size(variable_val) == Exgencode.Pdu.sizeof(pdu2, :conditional_variable_field)
+
+    assert 16 + 8 + 8 + 8 + 16 + bit_size(variable_val) ==
+             Exgencode.Pdu.sizeof_pdu(pdu2, nil, :bits)
+
+    pdu3 = %TestPdu.ConditionalPdu{
+      normal_field: 12,
+      flag_field: 0,
+      another_normal_field: 200,
+      second_flag: 0
+    }
+
+    assert 0 == Exgencode.Pdu.sizeof(pdu3, :conditional_field)
+    assert 0 == Exgencode.Pdu.sizeof(pdu3, :conditional_variable_field)
+
+    assert 16 + 8 + 8 + 8 ==
+             Exgencode.Pdu.sizeof_pdu(pdu3, nil, :bits)
+  end
 end
