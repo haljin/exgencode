@@ -238,4 +238,21 @@ defmodule ExgencodeTest do
                <<52::size(16), byte_size(variable_val)::size(16)>> <> variable_val <> <<37>>
              )
   end
+
+  test "size of variable pdus" do
+    variable_val =
+      "Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog."
+
+    pdu = %TestPdu.OtherVariablePdu{
+      some_field: 52,
+      size_field: byte_size(variable_val),
+      variable_field: variable_val,
+      trailing_field: 37
+    }
+
+    assert bit_size(variable_val) == Exgencode.Pdu.sizeof(pdu, :variable_field)
+    assert 16 + 16 + bit_size(variable_val) + 8 == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bits)
+  end
 end
