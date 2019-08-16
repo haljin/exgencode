@@ -173,4 +173,86 @@ defmodule ExgencodeTest do
               virtual_field: nil
             }, <<>>} == Exgencode.Pdu.decode(%TestPdu.VirtualPdu{}, <<49::size(16)>>)
   end
+
+  test "variable length fields" do
+    pdu = %TestPdu.VariablePdu{some_field: 52, size_field: 2, variable_field: "AB"}
+
+    assert <<52::size(16), 2::size(16), "A", "B">> == Exgencode.Pdu.encode(pdu)
+
+    assert {%TestPdu.VariablePdu{some_field: 52, size_field: 2, variable_field: "AB"}, <<>>} ==
+             Exgencode.Pdu.decode(%TestPdu.VariablePdu{}, <<52::size(16), 2::size(16), "A", "B">>)
+  end
+
+  test "variable length fields with other lengths" do
+    variable_val =
+      "Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog."
+
+    pdu = %TestPdu.VariablePdu{
+      some_field: 52,
+      size_field: byte_size(variable_val),
+      variable_field: variable_val
+    }
+
+    assert <<52::size(16), byte_size(variable_val)::size(16)>> <> variable_val ==
+             Exgencode.Pdu.encode(pdu)
+
+    assert {%TestPdu.VariablePdu{
+              some_field: 52,
+              size_field: byte_size(variable_val),
+              variable_field: variable_val
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.VariablePdu{},
+               <<52::size(16), byte_size(variable_val)::size(16)>> <> variable_val
+             )
+  end
+
+  test "variable length fields followed by normal fields" do
+    variable_val =
+      "Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog."
+
+    pdu = %TestPdu.OtherVariablePdu{
+      some_field: 52,
+      size_field: byte_size(variable_val),
+      variable_field: variable_val,
+      trailing_field: 37
+    }
+
+    assert <<52::size(16), byte_size(variable_val)::size(16)>> <> variable_val <> <<37>> ==
+             Exgencode.Pdu.encode(pdu)
+
+    assert {%TestPdu.OtherVariablePdu{
+              some_field: 52,
+              size_field: byte_size(variable_val),
+              variable_field: variable_val,
+              trailing_field: 37
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.OtherVariablePdu{},
+               <<52::size(16), byte_size(variable_val)::size(16)>> <> variable_val <> <<37>>
+             )
+  end
+
+  test "size of variable pdus" do
+    variable_val =
+      "Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog. Quick brown fox jumps over the lazy dog.
+      Quick brown fox jumps over the lazy dog."
+
+    pdu = %TestPdu.OtherVariablePdu{
+      some_field: 52,
+      size_field: byte_size(variable_val),
+      variable_field: variable_val,
+      trailing_field: 37
+    }
+
+    assert bit_size(variable_val) == Exgencode.Pdu.sizeof(pdu, :variable_field)
+    assert 16 + 16 + bit_size(variable_val) + 8 == Exgencode.Pdu.sizeof_pdu(pdu, nil, :bits)
+  end
 end

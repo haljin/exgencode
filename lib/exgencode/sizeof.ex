@@ -7,6 +7,14 @@ defmodule Exgencode.Sizeof do
     field_list
     |> Enum.map(fn {name, props} ->
       case props[:type] do
+        :variable ->
+          size_field = props[:size]
+
+          {name,
+           quote do
+             (fn p -> Map.get(p, unquote(size_field)) end).(pdu) * 8
+           end}
+
         :virtual ->
           {name, 0}
 

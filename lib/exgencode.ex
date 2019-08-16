@@ -67,7 +67,15 @@ defmodule Exgencode do
         aFieldWithDefault: [size: 10, default: 15]
 
   ### type
-  Defines the type of the field. Field can be of `:constant`, `:subrecord`, `:string`, `:binary`, `:float` and `:integer` types.
+  Defines the type of the field. Field can be of type:
+  * `:constant`
+  * `:subrecord`
+  * `:string`
+  * `:binary`
+  * `:float`
+  * `:integer`
+  * `:variable`
+
   If no type should is specified it will default to `:integer`. Both `:integer` and `:float` specify normal numerical values and have no special properties.
 
   #### :constant
@@ -122,6 +130,25 @@ defmodule Exgencode do
   If the field is an arbitrary binary value it can be specified with this type. In such case the size parameter indicates size in bytes
   rather than bits. This type does not define any padding, that is the size of the binary that is contained in this field must be of at least the defined field size,
   otherwise an `ArgumentError` is raised. If the size is larger the binary will be trimmed.
+
+  #### :variable
+  Variable fields have no pre-defined size, instead the size is defined by the value of another field. When defining a `:variable` field, the
+  `:size` parameter must be set to the name of the field definining the size, which in turn should be an `:integer` field. The size in that case
+  can only be specified in bytes. All `:variable` fields are binary fields.
+
+  #### Examples:
+      defpdu VariablePdu,
+        some_field: [size: 16],
+        size_field: [size: 16],
+        variable_field: [type: :variable, size: :size_field]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.VariablePdu{some_field: 52, size_field: 2, variable_field: "AB"})
+      <<52::size(16), 2::size(16), "A", "B">>
+
+      iex> Exgencode.Pdu.decode(%TestPdu.VariablePdu{}, <<52::size(16), 2::size(16), "A", "B">>)
+      {%TestPdu.VariablePdu{some_field: 52, size_field: 2, variable_field: "AB"}, <<>>}
+
+  Note that the field defining the size must be defined before the variable length field.
 
   #### Examples:
 
@@ -201,15 +228,22 @@ defmodule Exgencode do
   defmacro defpdu name, original_field_list do
     check_pdu_size(name, original_field_list)
 
-    {field_list, fields_for_encodes, fields_for_decodes} = map_fields(name, original_field_list)
+    field_list = map_fields(name, original_field_list)
+
+    fields_for_encodes =
+      Enum.map(field_list, fn {field_name, props} ->
+        {field_name, props[:encode]}
+      end)
+
+    fields_for_decodes =
+      Enum.map(field_list, fn {field_name, props} ->
+        {field_name, props[:decode]}
+      end)
 
     struct_fields =
       for {field_name, props} <- field_list, props[:type] != :constant do
         {field_name, props[:default]}
       end
-
-    sizeofs = Exgencode.Sizeof.build_sizeof(field_list)
-    sizeof_pdus = Exgencode.Sizeof.build_sizeof_pdu(field_list)
 
     # out =
     quote do
@@ -222,20 +256,18 @@ defmodule Exgencode do
       end
 
       defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
-        unquote(sizeofs)
-        unquote(sizeof_pdus)
+        unquote(Exgencode.Sizeof.build_sizeof(field_list))
+        unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
 
         def encode(pdu, version) do
           for {field, encode_fun} <- unquote(fields_for_encodes),
               into: <<>>,
-              do: encode_fun.(version).(Map.get(pdu, field))
+              do: encode_fun.(version).(pdu)
         end
 
         def decode(pdu, binary, version) do
           do_decode(pdu, binary, unquote(fields_for_decodes), version)
         end
-
-        defp do_decode(pdu, binary, fields, version)
 
         defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
           {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
@@ -253,91 +285,83 @@ defmodule Exgencode do
   end
 
   defp map_fields(name, original_field_list) do
-    field_list =
-      for {field_name, props} <- original_field_list do
-        field_size = props[:size]
-        endianness = Access.get(props, :endianness, :big)
-        field_type = Access.get(props, :type, :integer)
+    for {field_name, props} <- original_field_list do
+      field_size = props[:size]
+      endianness = Access.get(props, :endianness, :big)
+      field_type = Access.get(props, :type, :integer)
 
-        case {props[:encode], props[:decode]} do
-          {nil, nil} ->
-            unless valid_field_size?(field_type, props[:encode], field_size),
-              do:
-                raise_argument_error(
-                  name,
-                  field_name,
-                  "Size must be defined unless a field is of type :subrecord or :virtual or custom decode/encode functions are provided. Size of float must be 32 or 64."
-                )
-
-            encode_fun =
-              Exgencode.EncodeDecode.create_versioned_encode(
-                Exgencode.EncodeDecode.create_encode_fun(
-                  field_type,
-                  field_size,
-                  props[:default],
-                  endianness
-                ),
-                props[:version]
+      case {props[:encode], props[:decode]} do
+        {nil, nil} ->
+          unless valid_field_size?(field_type, props[:encode], field_size),
+            do:
+              raise_argument_error(
+                name,
+                field_name,
+                "Size must be defined unless a field is of type :subrecord or :virtual or custom decode/encode functions are provided. Size of float must be 32 or 64. :variable type fields must specify the name of the field defining their size."
               )
 
-            decode_fun =
-              Exgencode.EncodeDecode.create_versioned_decode(
-                Exgencode.EncodeDecode.create_decode_fun(
-                  field_type,
-                  field_size,
-                  props[:default],
-                  field_name,
-                  endianness
-                ),
-                props[:version]
-              )
-
-            {field_name, [{:encode, encode_fun}, {:decode, decode_fun} | props]}
-
-          {_encode_fun, nil} ->
-            raise_argument_error(
-              name,
-              field_name,
-              "Cannot define custom encode without custom decode"
+          encode_fun =
+            Exgencode.EncodeDecode.create_versioned_encode(
+              Exgencode.EncodeDecode.create_encode_fun(
+                field_type,
+                field_name,
+                field_size,
+                props[:default],
+                endianness
+              ),
+              props[:version]
             )
 
-          {nil, _decode_fun} ->
-            raise_argument_error(
-              name,
-              field_name,
-              "Cannot define custom decode without custom encode"
+          decode_fun =
+            Exgencode.EncodeDecode.create_versioned_decode(
+              Exgencode.EncodeDecode.create_decode_fun(
+                field_type,
+                field_size,
+                props[:default],
+                field_name,
+                endianness
+              ),
+              props[:version]
             )
 
-          _ ->
-            encode_fun =
-              Exgencode.EncodeDecode.create_versioned_encode(props[:encode], props[:version])
+          {field_name, [{:encode, encode_fun}, {:decode, decode_fun} | props]}
 
-            decode_fun =
-              Exgencode.EncodeDecode.create_versioned_decode(props[:decode], props[:version])
+        {_encode_fun, nil} ->
+          raise_argument_error(
+            name,
+            field_name,
+            "Cannot define custom encode without custom decode"
+          )
 
-            {field_name,
-             props
-             |> Keyword.replace!(:encode, encode_fun)
-             |> Keyword.replace!(:decode, decode_fun)}
-        end
+        {nil, _decode_fun} ->
+          raise_argument_error(
+            name,
+            field_name,
+            "Cannot define custom decode without custom encode"
+          )
+
+        _ ->
+          encode_fun =
+            Exgencode.EncodeDecode.create_versioned_encode(
+              Exgencode.EncodeDecode.wrap_custom_encode(field_name, props[:encode]),
+              props[:version]
+            )
+
+          decode_fun =
+            Exgencode.EncodeDecode.create_versioned_decode(props[:decode], props[:version])
+
+          {field_name,
+           props
+           |> Keyword.replace!(:encode, encode_fun)
+           |> Keyword.replace!(:decode, decode_fun)}
       end
-
-    fields_for_encodes =
-      for {field_name, props} <- field_list do
-        {field_name, props[:encode]}
-      end
-
-    fields_for_decodes =
-      for {field_name, props} <- field_list do
-        {field_name, props[:decode]}
-      end
-
-    {field_list, fields_for_encodes, fields_for_decodes}
+    end
   end
 
   defp check_pdu_size(pdu_name, fields) do
     total_size =
       fields
+      |> Enum.reject(fn {_field_name, props} -> props[:type] == :variable end)
       |> Enum.map(fn {_field_name, props} ->
         props[:size]
       end)
@@ -363,6 +387,8 @@ defmodule Exgencode do
   defp valid_field_size?(:float, nil, 32), do: true
   defp valid_field_size?(:float, nil, 64), do: true
   defp valid_field_size?(:float, nil, _), do: false
+  defp valid_field_size?(:variable, nil, name) when is_atom(name), do: true
+  defp valid_field_size?(:variable, nil, _name), do: false
   defp valid_field_size?(_other_type, encode_fun, _size) when not is_nil(encode_fun), do: true
   defp valid_field_size?(_other_type, _encode_fun, size) when is_integer(size), do: true
   defp valid_field_size?(_, _, _), do: false

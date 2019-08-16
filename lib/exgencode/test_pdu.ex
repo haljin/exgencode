@@ -70,4 +70,15 @@ defmodule Exgencode.TestPdu do
   defpdu VirtualPdu,
     real_field: [size: 16],
     virtual_field: [type: :virtual]
+
+  defpdu VariablePdu,
+    some_field: [size: 16],
+    size_field: [size: 16],
+    variable_field: [type: :variable, size: :size_field]
+
+  defpdu OtherVariablePdu,
+    some_field: [size: 16],
+    size_field: [size: 16],
+    variable_field: [type: :variable, size: :size_field],
+    trailing_field: [size: 8]
 end
