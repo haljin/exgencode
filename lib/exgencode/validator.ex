@@ -34,13 +34,29 @@ defmodule Exgencode.Validator do
   end
 
   defp validate_conditional(pdu_name, field_name, props, all_fields) do
-    if props[:conditional] != nil and props[:conditional] not in all_fields,
-      do:
-        raise_argument_error(
-          pdu_name,
-          field_name,
-          "Invalid conditional reference to nonexistant field"
-        )
+    case props[:conditional] do
+      nil ->
+        :ok
+
+      _field ->
+        if props[:conditional] not in all_fields,
+          do:
+            raise_argument_error(
+              pdu_name,
+              field_name,
+              "Invalid conditional reference to nonexistant field"
+            )
+
+        if not is_nil(props[:default]),
+          do:
+            raise_argument_error(
+              pdu_name,
+              field_name,
+              "Conditional fields must default to nil!"
+            )
+
+        :ok
+    end
   end
 
   defp validate_field_size(pdu_name, field_name, props, all_fields) do
