@@ -225,6 +225,43 @@ defmodule Exgencode do
       iex> Exgencode.Pdu.encode(%TestPdu.EndianMsg{})
       << 15 :: big-size(32), 15 :: little-size(32)>>
 
+  ### conditional
+  Defines that the field is present in encoded binary format only if another field has a non-null value.
+
+  Examples:
+
+      defpdu ConditionalPdu,
+          normal_field: [size: 16],
+          flag_field: [size: 8],
+          conditional_field: [size: 8, conditional: :flag_field],
+          another_normal_field: [size: 8],
+          second_flag: [size: 8],
+          size_field: [size: 16, conditional: :second_flag],
+          conditional_variable_field: [type: :variable, size: :size_field, conditional: :second_flag]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.ConditionalPdu{
+      ...>      normal_field: 12,
+      ...>      flag_field: 1,
+      ...>      conditional_field: 10,
+      ...>      another_normal_field: 200,
+      ...>      second_flag: 1,
+      ...>      size_field: 4,
+      ...>      conditional_variable_field: "test"
+      ...>    })
+      <<12::size(16), 1, 10, 200, 1, 4::size(16), "test">>
+
+      iex> Exgencode.Pdu.encode(%TestPdu.ConditionalPdu{
+      ...>      normal_field: 12,
+      ...>      flag_field: 1,
+      ...>      conditional_field: 10,
+      ...>      another_normal_field: 200,
+      ...>      second_flag: 0,
+      ...>      size_field: nil,
+      ...>      conditional_variable_field: nil
+      ...>    })
+      <<12::size(16), 1, 10, 200, 0>>
+
+
   """
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
   defmacro defpdu name, original_field_list do
