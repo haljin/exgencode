@@ -225,10 +225,47 @@ defmodule Exgencode do
       iex> Exgencode.Pdu.encode(%TestPdu.EndianMsg{})
       << 15 :: big-size(32), 15 :: little-size(32)>>
 
+  ### conditional
+  Defines that the field is present in encoded binary format only if another field has a non-null value.
+
+  Examples:
+
+      defpdu ConditionalPdu,
+          normal_field: [size: 16],
+          flag_field: [size: 8],
+          conditional_field: [size: 8, conditional: :flag_field],
+          another_normal_field: [size: 8],
+          second_flag: [size: 8],
+          size_field: [size: 16, conditional: :second_flag],
+          conditional_variable_field: [type: :variable, size: :size_field, conditional: :second_flag]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.ConditionalPdu{
+      ...>      normal_field: 12,
+      ...>      flag_field: 1,
+      ...>      conditional_field: 10,
+      ...>      another_normal_field: 200,
+      ...>      second_flag: 1,
+      ...>      size_field: 4,
+      ...>      conditional_variable_field: "test"
+      ...>    })
+      <<12::size(16), 1, 10, 200, 1, 4::size(16), "test">>
+
+      iex> Exgencode.Pdu.encode(%TestPdu.ConditionalPdu{
+      ...>      normal_field: 12,
+      ...>      flag_field: 1,
+      ...>      conditional_field: 10,
+      ...>      another_normal_field: 200,
+      ...>      second_flag: 0,
+      ...>      size_field: nil,
+      ...>      conditional_variable_field: nil
+      ...>    })
+      <<12::size(16), 1, 10, 200, 0>>
+
+
   """
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
   defmacro defpdu name, original_field_list do
-    check_pdu_size(name, original_field_list)
+    Exgencode.Validator.validate_pdu(name, original_field_list)
 
     field_list = map_fields(name, original_field_list)
 
@@ -294,19 +331,13 @@ defmodule Exgencode do
           original_props
         )
 
-      field_size = props[:size]
+      all_field_names = Enum.map(original_field_list, fn {name, _} -> name end)
+      Exgencode.Validator.validate_field(name, field_name, props, all_field_names)
+
       field_type = props[:type]
 
       case {props[:encode], props[:decode]} do
         {nil, nil} ->
-          unless valid_field_size?(field_type, field_size),
-            do:
-              raise_argument_error(
-                name,
-                field_name,
-                "Size must be defined unless a field is of type :subrecord or :virtual or custom decode/encode functions are provided. Size of float must be 32 or 64. :variable type fields must specify the name of the field defining their size."
-              )
-
           encode_fun =
             Exgencode.EncodeDecode.create_versioned_encode(
               Exgencode.EncodeDecode.create_encode_fun(
@@ -329,20 +360,6 @@ defmodule Exgencode do
 
           {field_name, [{:encode, encode_fun}, {:decode, decode_fun} | props]}
 
-        {_encode_fun, nil} ->
-          raise_argument_error(
-            name,
-            field_name,
-            "Cannot define custom encode without custom decode"
-          )
-
-        {nil, _decode_fun} ->
-          raise_argument_error(
-            name,
-            field_name,
-            "Cannot define custom decode without custom encode"
-          )
-
         _ ->
           encode_fun =
             Exgencode.EncodeDecode.create_versioned_encode(
@@ -360,38 +377,4 @@ defmodule Exgencode do
       end
     end
   end
-
-  defp check_pdu_size(pdu_name, fields) do
-    total_size =
-      fields
-      |> Enum.reject(fn {_field_name, props} -> props[:type] == :variable end)
-      |> Enum.map(fn {_field_name, props} ->
-        props[:size]
-      end)
-      |> Enum.filter(&(not is_nil(&1)))
-      |> Enum.sum()
-
-    if rem(total_size, 8) != 0,
-      do:
-        raise(
-          ArgumentError,
-          "#{inspect(pdu_name |> Macro.to_string())} Total size of PDU must be divisible into full bytes!"
-        )
-  end
-
-  defp raise_argument_error(pdu_name, field_name, msg) do
-    raise ArgumentError,
-          "Badly defined field #{inspect(field_name)} in #{inspect(pdu_name |> Macro.to_string())} - " <>
-            msg
-  end
-
-  defp valid_field_size?(:subrecord, _size), do: true
-  defp valid_field_size?(:virtual, _size), do: true
-  defp valid_field_size?(:float, 32), do: true
-  defp valid_field_size?(:float, 64), do: true
-  defp valid_field_size?(:float, _), do: false
-  defp valid_field_size?(:variable, name) when is_atom(name), do: true
-  defp valid_field_size?(:variable, _name), do: false
-  defp valid_field_size?(_other_type, size) when is_integer(size), do: true
-  defp valid_field_size?(_, _), do: false
 end

@@ -40,9 +40,10 @@ defmodule Exgencode.Mixfile do
       name: "exgencode",
       files: [
         "lib/exgencode.ex",
-        "lib/pdu.ex",
-        "lib/encode_decode.ex",
-        "lib/sizeof.ex",
+        "lib/exgencode/pdu.ex",
+        "lib/exgencode/encode_decode.ex",
+        "lib/exgencode/sizeof.ex",
+        "lib/exgencode/validator.ex",
         "mix.exs",
         "README*",
         "LICENSE*"
