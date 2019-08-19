@@ -90,4 +90,31 @@ defmodule Exgencode.TestPdu do
     second_flag: [size: 8],
     size_field: [size: 16, conditional: :second_flag],
     conditional_variable_field: [type: :variable, size: :size_field, conditional: :second_flag]
+
+  defpdu OffsetPdu,
+    offset_to_field_a: [size: 16, offset_to: :field_a],
+    offset_to_field_b: [size: 16, offset_to: :field_b],
+    offset_to_field_c: [size: 16, offset_to: :field_c],
+    field_a: [size: 8],
+    size_field: [size: 16],
+    variable_field: [type: :variable, size: :size_field],
+    field_b: [size: 8],
+    field_c: [size: 8, conditional: :offset_to_field_c]
+
+  defpdu SomeSubPdu,
+    size_field: [size: 16],
+    variable_field: [type: :variable, size: :size_field]
+
+  defpdu OffsetSubPdu,
+    offset_to_first_sub: [size: 16, offset_to: :first_sub],
+    offset_to_second_sub: [size: 16, offset_to: :second_sub],
+    static_field: [size: 8],
+    first_sub: [type: :subrecord, default: %SomeSubPdu{}, conditional: :offset_to_first_sub],
+    second_sub: [type: :subrecord, default: %SomeSubPdu{}, conditional: :offset_to_first_sub]
+
+  defpdu VersionedOffsetPdu,
+    offset_to_something: [size: 16, offset_to: :something],
+    static_field: [size: 8],
+    versioned_field: [size: 16, version: ">= 2.0.0"],
+    something: [size: 8, conditional: :offset_to_something]
 end

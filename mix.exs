@@ -44,6 +44,7 @@ defmodule Exgencode.Mixfile do
         "lib/exgencode/encode_decode.ex",
         "lib/exgencode/sizeof.ex",
         "lib/exgencode/validator.ex",
+        "lib/exgencode/offsets.ex",
         "mix.exs",
         "README*",
         "LICENSE*"

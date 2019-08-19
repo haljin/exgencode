@@ -359,4 +359,153 @@ defmodule ExgencodeTest do
     assert 16 + 8 + 8 + 8 ==
              Exgencode.Pdu.sizeof_pdu(pdu3, nil, :bits)
   end
+
+  test "offset fields" do
+    variable_val = "This is just a test."
+
+    pdu = %TestPdu.OffsetPdu{
+      field_a: 14,
+      size_field: byte_size(variable_val),
+      variable_field: variable_val,
+      field_b: 15,
+      field_c: 20
+    }
+
+    assert 6 ==
+             [:offset_to_field_a, :offset_to_field_b, :offset_to_field_c]
+             |> Enum.map(fn field_name -> Exgencode.Pdu.sizeof(pdu, field_name) end)
+             |> Enum.sum()
+             |> div(8)
+
+    assert 9 + byte_size(variable_val) ==
+             [
+               :offset_to_field_a,
+               :offset_to_field_b,
+               :offset_to_field_c,
+               :field_a,
+               :size_field,
+               :variable_field
+             ]
+             |> Enum.map(fn field_name -> Exgencode.Pdu.sizeof(pdu, field_name) end)
+             |> Enum.sum()
+             |> div(8)
+
+    assert <<6::size(16), 9 + byte_size(variable_val)::size(16),
+             10 + byte_size(variable_val)::size(16), 14,
+             byte_size(variable_val)::size(16)>> <> variable_val <> <<15, 20>> ==
+             Exgencode.Pdu.encode(pdu)
+
+    assert {%TestPdu.OffsetPdu{
+              pdu
+              | offset_to_field_a: 6,
+                offset_to_field_b: 29,
+                offset_to_field_c: 30
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.OffsetPdu{},
+               <<6::size(16), 9 + byte_size(variable_val)::size(16),
+                 10 + byte_size(variable_val)::size(16), 14,
+                 byte_size(variable_val)::size(16)>> <> variable_val <> <<15, 20>>
+             )
+
+    pdu2 = %TestPdu.OffsetPdu{
+      field_a: 14,
+      size_field: byte_size(variable_val),
+      variable_field: variable_val,
+      field_b: 15,
+      field_c: nil
+    }
+
+    assert <<6::size(16), 9 + byte_size(variable_val)::size(16), 0::size(16), 14,
+             byte_size(variable_val)::size(16)>> <> variable_val <> <<15>> ==
+             Exgencode.Pdu.encode(pdu2)
+
+    assert {%TestPdu.OffsetPdu{
+              pdu2
+              | offset_to_field_a: 6,
+                offset_to_field_b: 29,
+                offset_to_field_c: 0
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.OffsetPdu{},
+               <<6::size(16), 9 + byte_size(variable_val)::size(16), 0::size(16), 14,
+                 byte_size(variable_val)::size(16)>> <> variable_val <> <<15>>
+             )
+  end
+
+  test "more complex offset pdus" do
+    variable_val = "This is just a test."
+    another_variable_val = "This is also just a test."
+
+    sub_pdu = %TestPdu.SomeSubPdu{
+      size_field: byte_size(variable_val),
+      variable_field: variable_val
+    }
+
+    pdu = %TestPdu.OffsetSubPdu{
+      static_field: 78,
+      first_sub: sub_pdu,
+      second_sub: %TestPdu.SomeSubPdu{
+        size_field: byte_size(another_variable_val),
+        variable_field: another_variable_val
+      }
+    }
+
+    assert <<5::size(16), 5 + Exgencode.Pdu.sizeof_pdu(sub_pdu, nil, :bytes)::size(16), 78,
+             byte_size(variable_val)::size(16)>> <>
+             variable_val <> <<byte_size(another_variable_val)::size(16)>> <> another_variable_val ==
+             Exgencode.Pdu.encode(pdu)
+
+    assert {%TestPdu.OffsetSubPdu{
+              pdu
+              | offset_to_first_sub: 5,
+                offset_to_second_sub: 5 + Exgencode.Pdu.sizeof_pdu(sub_pdu, nil, :bytes)
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.OffsetSubPdu{},
+               <<5::size(16), 5 + Exgencode.Pdu.sizeof_pdu(sub_pdu, nil, :bytes)::size(16), 78,
+                 byte_size(variable_val)::size(16)>> <>
+                 variable_val <>
+                 <<byte_size(another_variable_val)::size(16)>> <> another_variable_val
+             )
+  end
+
+  test "versioned offset pdus" do
+    pdu = %TestPdu.VersionedOffsetPdu{
+      static_field: 78,
+      versioned_field: 10,
+      something: 18
+    }
+
+    assert <<5::size(16), 78, 10::size(16), 18>> ==
+             Exgencode.Pdu.encode(pdu)
+
+    assert <<3::size(16), 78, 18>> ==
+             Exgencode.Pdu.encode(pdu, "1.0.0")
+
+    assert {%TestPdu.VersionedOffsetPdu{
+              pdu
+              | offset_to_something: 5
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.VersionedOffsetPdu{},
+               <<5::size(16), 78, 10::size(16), 18>>
+             )
+
+    assert {%TestPdu.VersionedOffsetPdu{
+              pdu
+              | offset_to_something: 3,
+                versioned_field: nil
+            },
+            <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.VersionedOffsetPdu{},
+               <<3::size(16), 78, 18>>,
+               "1.0.0"
+             )
+  end
 end

@@ -66,4 +66,11 @@ defmodule Exgencode.Pdu do
   """
   @spec decode(Exgencode.pdu(), binary, nil | Version.version()) :: {Exgencode.pdu(), binary}
   def decode(pdu, binary, version \\ nil), do: Exgencode.Pdu.Protocol.decode(pdu, binary, version)
+
+  @doc """
+  Set the values of all offset fields. If no fields have the `:offset_to` property it
+  become an identity function
+  """
+  @spec set_offsets(Exgencode.pdu(), nil | Version.version()) :: Exgencode.pdu()
+  def set_offsets(pdu, version \\ nil), do: Exgencode.Pdu.Protocol.set_offsets(pdu, version)
 end

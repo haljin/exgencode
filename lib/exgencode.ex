@@ -6,16 +6,19 @@ defmodule Exgencode do
   defprotocol Pdu.Protocol do
     @doc "Returns the size of the field in bits."
     def sizeof(pdu, field_name)
-    @doc "Returns the size of the pdu for given version (does not count subrecords size)."
+    @doc "Returns the size of the pdu for given version."
     @spec sizeof_pdu(Exgencode.pdu(), Version.version() | nil, Exgencode.return_size_type()) ::
             non_neg_integer | {:subrecord, Exgencode.pdu()}
     def sizeof_pdu(pdu, version, type)
-    @doc "Encode the Elixir structure into a binary give the protocol version."
+    @doc "Encode the Elixir structure into a binary given the protocol version."
     @spec encode(Exgencode.pdu(), nil | Version.version()) :: binary
     def encode(pdu, version)
     @doc "Decode a binary into the specified Elixir structure."
     @spec decode(Exgencode.pdu(), binary, nil | Version.version()) :: {Exgencode.pdu(), binary}
     def decode(pdu, binary, version)
+    @doc "Calculate the values of all offset fields."
+    @spec set_offsets(Exgencode.pdu(), Version.version()) :: Exgencode.pdu()
+    def set_offsets(pdu, version)
   end
 
   @typedoc "A PDU, that is an Elixir structure representing a PDU."
@@ -24,7 +27,7 @@ defmodule Exgencode do
   @type pdu_name :: module
   @typedoc "The type of the field."
   @type field_type ::
-          :subrecord | :constant | :string | :binary | :float | :integer | :variable | :offset
+          :subrecord | :constant | :string | :binary | :float | :integer | :variable
   @typedoc "A custom encoding function that is meant to take the value of the field and return its binary represantion."
   @type field_encode_fun :: (term -> bitstring)
   @typedoc "A custom decoding function that receives the PDU decoded so far and remaining binary and is meant to return PDU with the field decoded and remaining binary."
@@ -40,6 +43,7 @@ defmodule Exgencode do
           | {:version, Version.requirement()}
           | {:endianness, field_endianness}
           | {:conditional, field_name}
+          | {:offset_to, field_name}
   @typedoc "Name of the field."
   @type field_name :: atom
   @typedoc "Desired return type of pdu size"
@@ -261,6 +265,41 @@ defmodule Exgencode do
       ...>    })
       <<12::size(16), 1, 10, 200, 0>>
 
+  ### offset_to
+  Defines that the field contains the offset to another field. The offset is in bytes since the
+  beginning of the PDU. Note that offsets are automatically calculated when calling `Exgencode.Pdu.encode/2
+
+  Examples:
+
+      defpdu OffsetPdu,
+        offset_to_field_a: [size: 16, offset_to: :field_a],
+        offset_to_field_b: [size: 16, offset_to: :field_b],
+        offset_to_field_c: [size: 16, offset_to: :field_c],
+        field_a: [size: 8],
+        size_field: [size: 16],
+        variable_field: [type: :variable, size: :size_field],
+        field_b: [size: 8],
+        field_c: [size: 8, conditional: :offset_to_field_c]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.OffsetPdu{
+      ...>   field_a: 14,
+      ...>   size_field: 4,
+      ...>   variable_field: "test",
+      ...>   field_b: 15,
+      ...>   field_c: 20
+      ...> })
+      <<6::size(16), 9 + 4::size(16),10 + 4::size(16), 14, 4::size(16)>> <> "test" <> <<15, 20>>
+
+      iex> Exgencode.Pdu.encode(%TestPdu.OffsetPdu{
+      ...>   field_a: 14,
+      ...>   size_field: 4,
+      ...>   variable_field: "test",
+      ...>   field_b: 15,
+      ...>   field_c: nil
+      ...> })
+      <<6::size(16), 9 + 4::size(16), 0::size(16), 14, 4::size(16)>> <> "test" <> <<15>>
+
+
 
   """
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
@@ -298,7 +337,11 @@ defmodule Exgencode do
         unquote(Exgencode.Sizeof.build_sizeof(field_list))
         unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
 
+        unquote(Exgencode.Offsets.create_offset_fun(field_list))
+
         def encode(pdu, version) do
+          pdu = Exgencode.Pdu.set_offsets(pdu, version)
+
           for {field, encode_fun} <- unquote(fields_for_encodes),
               into: <<>>,
               do: encode_fun.(version).(pdu)
