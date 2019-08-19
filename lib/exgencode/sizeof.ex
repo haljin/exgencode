@@ -5,26 +5,8 @@ defmodule Exgencode.Sizeof do
 
   def build_sizeof(field_list) do
     field_list
-    |> Enum.map(fn {name, props} ->
-      case props[:type] do
-        :variable ->
-          size_field = props[:size]
-
-          {name,
-           quote do
-             (fn p -> Map.get(p, unquote(size_field)) end).(pdu) * 8
-           end}
-
-        :virtual ->
-          {name, 0}
-
-        :subrecord ->
-          {name, {:subrecord, props[:default]}}
-
-        _ ->
-          {name, props[:size]}
-      end
-    end)
+    |> Enum.map(&build_size/1)
+    |> Enum.map(&build_conditional/1)
     |> Enum.map(fn {name, size} ->
       quote do
         def sizeof(pdu, unquote(name)), do: unquote(size)
@@ -69,6 +51,47 @@ defmodule Exgencode.Sizeof do
 
       defp bits_or_bytes(sum, :bits), do: sum
       defp bits_or_bytes(sum, :bytes), do: div(sum, 8)
+    end
+  end
+
+  defp build_size({name, props}) do
+    case props[:type] do
+      :variable ->
+        size_field = props[:size]
+
+        {name, props,
+         quote do
+           (fn %{unquote(size_field) => val} -> val end).(pdu) * 8
+         end}
+
+      :virtual ->
+        {name, props, 0}
+
+      :subrecord ->
+        {name, props, {:subrecord, props[:default]}}
+
+      _ ->
+        {name, props, props[:size]}
+    end
+  end
+
+  defp build_conditional({name, props, size}) do
+    case props[:conditional] do
+      nil ->
+        {name, size}
+
+      conditional_field_name ->
+        {name,
+         quote do
+           (fn
+              %{unquote(conditional_field_name) => val} = p
+              when val == 0 or val == "" or val == nil ->
+                0
+
+              p ->
+                unquote(size)
+            end).(pdu)
+         end}
     end
   end
 end

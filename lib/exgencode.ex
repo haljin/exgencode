@@ -23,7 +23,8 @@ defmodule Exgencode do
   @typedoc "PDU name, must be a structure name"
   @type pdu_name :: module
   @typedoc "The type of the field."
-  @type field_type :: :subrecord | :constant | :string | :binary | :float | :integer
+  @type field_type ::
+          :subrecord | :constant | :string | :binary | :float | :integer | :variable | :offset
   @typedoc "A custom encoding function that is meant to take the value of the field and return its binary represantion."
   @type field_encode_fun :: (term -> bitstring)
   @typedoc "A custom decoding function that receives the PDU decoded so far and remaining binary and is meant to return PDU with the field decoded and remaining binary."
@@ -32,12 +33,13 @@ defmodule Exgencode do
   @type field_endianness :: :big | :little | :native
   @typedoc "Parameters of the given field"
   @type fieldParam ::
-          {:size, non_neg_integer}
+          {:size, non_neg_integer | field_name}
           | {:type, field_type}
           | {:encode, field_encode_fun}
           | {:decode, field_decode_fun}
           | {:version, Version.requirement()}
           | {:endianness, field_endianness}
+          | {:conditional, field_name}
   @typedoc "Name of the field."
   @type field_name :: atom
   @typedoc "Desired return type of pdu size"
@@ -223,10 +225,47 @@ defmodule Exgencode do
       iex> Exgencode.Pdu.encode(%TestPdu.EndianMsg{})
       << 15 :: big-size(32), 15 :: little-size(32)>>
 
+  ### conditional
+  Defines that the field is present in encoded binary format only if another field has a non-null value.
+
+  Examples:
+
+      defpdu ConditionalPdu,
+          normal_field: [size: 16],
+          flag_field: [size: 8],
+          conditional_field: [size: 8, conditional: :flag_field],
+          another_normal_field: [size: 8],
+          second_flag: [size: 8],
+          size_field: [size: 16, conditional: :second_flag],
+          conditional_variable_field: [type: :variable, size: :size_field, conditional: :second_flag]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.ConditionalPdu{
+      ...>      normal_field: 12,
+      ...>      flag_field: 1,
+      ...>      conditional_field: 10,
+      ...>      another_normal_field: 200,
+      ...>      second_flag: 1,
+      ...>      size_field: 4,
+      ...>      conditional_variable_field: "test"
+      ...>    })
+      <<12::size(16), 1, 10, 200, 1, 4::size(16), "test">>
+
+      iex> Exgencode.Pdu.encode(%TestPdu.ConditionalPdu{
+      ...>      normal_field: 12,
+      ...>      flag_field: 1,
+      ...>      conditional_field: 10,
+      ...>      another_normal_field: 200,
+      ...>      second_flag: 0,
+      ...>      size_field: nil,
+      ...>      conditional_variable_field: nil
+      ...>    })
+      <<12::size(16), 1, 10, 200, 0>>
+
+
   """
   @spec defpdu(pdu_name, [{field_name, fieldParam}]) :: any
   defmacro defpdu name, original_field_list do
-    check_pdu_size(name, original_field_list)
+    Exgencode.Validator.validate_pdu(name, original_field_list)
 
     field_list = map_fields(name, original_field_list)
 
@@ -245,69 +284,66 @@ defmodule Exgencode do
         {field_name, props[:default]}
       end
 
-    # out =
-    quote do
-      defmodule unquote(name) do
-        @moduledoc false
+    out =
+      quote do
+        defmodule unquote(name) do
+          @moduledoc false
 
-        defstruct unquote(struct_fields)
+          defstruct unquote(struct_fields)
 
-        @type t :: %unquote(name){}
+          @type t :: %unquote(name){}
+        end
+
+        defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
+          unquote(Exgencode.Sizeof.build_sizeof(field_list))
+          unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
+
+          def encode(pdu, version) do
+            for {field, encode_fun} <- unquote(fields_for_encodes),
+                into: <<>>,
+                do: encode_fun.(version).(pdu)
+          end
+
+          def decode(pdu, binary, version) do
+            do_decode(pdu, binary, unquote(fields_for_decodes), version)
+          end
+
+          defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
+            {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
+            do_decode(new_pdu, rest_binary, rest, version)
+          end
+
+          defp do_decode(pdu, rest_bin, [], _) do
+            {pdu, rest_bin}
+          end
+        end
       end
 
-      defimpl Exgencode.Pdu.Protocol, for: unquote(name) do
-        unquote(Exgencode.Sizeof.build_sizeof(field_list))
-        unquote(Exgencode.Sizeof.build_sizeof_pdu(field_list))
-
-        def encode(pdu, version) do
-          for {field, encode_fun} <- unquote(fields_for_encodes),
-              into: <<>>,
-              do: encode_fun.(version).(pdu)
-        end
-
-        def decode(pdu, binary, version) do
-          do_decode(pdu, binary, unquote(fields_for_decodes), version)
-        end
-
-        defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
-          {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
-          do_decode(new_pdu, rest_binary, rest, version)
-        end
-
-        defp do_decode(pdu, rest_bin, [], _) do
-          {pdu, rest_bin}
-        end
-      end
-    end
-
-    # File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
-    # out
+    File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
+    out
   end
 
   defp map_fields(name, original_field_list) do
-    for {field_name, props} <- original_field_list do
-      field_size = props[:size]
-      endianness = Access.get(props, :endianness, :big)
-      field_type = Access.get(props, :type, :integer)
+    for {field_name, original_props} <- original_field_list do
+      props =
+        Keyword.merge(
+          [endianness: :big, type: :integer, conditional: nil, encode: nil, decode: nil],
+          original_props
+        )
+
+      all_field_names = Enum.map(original_field_list, fn {name, _} -> name end)
+      Exgencode.Validator.validate_field(name, field_name, props, all_field_names)
+
+      field_type = props[:type]
 
       case {props[:encode], props[:decode]} do
         {nil, nil} ->
-          unless valid_field_size?(field_type, props[:encode], field_size),
-            do:
-              raise_argument_error(
-                name,
-                field_name,
-                "Size must be defined unless a field is of type :subrecord or :virtual or custom decode/encode functions are provided. Size of float must be 32 or 64. :variable type fields must specify the name of the field defining their size."
-              )
-
           encode_fun =
             Exgencode.EncodeDecode.create_versioned_encode(
               Exgencode.EncodeDecode.create_encode_fun(
                 field_type,
                 field_name,
-                field_size,
-                props[:default],
-                endianness
+                props
               ),
               props[:version]
             )
@@ -316,29 +352,13 @@ defmodule Exgencode do
             Exgencode.EncodeDecode.create_versioned_decode(
               Exgencode.EncodeDecode.create_decode_fun(
                 field_type,
-                field_size,
-                props[:default],
                 field_name,
-                endianness
+                props
               ),
               props[:version]
             )
 
           {field_name, [{:encode, encode_fun}, {:decode, decode_fun} | props]}
-
-        {_encode_fun, nil} ->
-          raise_argument_error(
-            name,
-            field_name,
-            "Cannot define custom encode without custom decode"
-          )
-
-        {nil, _decode_fun} ->
-          raise_argument_error(
-            name,
-            field_name,
-            "Cannot define custom decode without custom encode"
-          )
 
         _ ->
           encode_fun =
@@ -357,39 +377,4 @@ defmodule Exgencode do
       end
     end
   end
-
-  defp check_pdu_size(pdu_name, fields) do
-    total_size =
-      fields
-      |> Enum.reject(fn {_field_name, props} -> props[:type] == :variable end)
-      |> Enum.map(fn {_field_name, props} ->
-        props[:size]
-      end)
-      |> Enum.filter(&(not is_nil(&1)))
-      |> Enum.sum()
-
-    if rem(total_size, 8) != 0,
-      do:
-        raise(
-          ArgumentError,
-          "#{inspect(pdu_name |> Macro.to_string())} Total size of PDU must be divisible into full bytes!"
-        )
-  end
-
-  defp raise_argument_error(pdu_name, field_name, msg) do
-    raise ArgumentError,
-          "Badly defined field #{inspect(field_name)} in #{inspect(pdu_name |> Macro.to_string())} - " <>
-            msg
-  end
-
-  defp valid_field_size?(:subrecord, _encode_fun, _size), do: true
-  defp valid_field_size?(:virtual, _encode_fun, _size), do: true
-  defp valid_field_size?(:float, nil, 32), do: true
-  defp valid_field_size?(:float, nil, 64), do: true
-  defp valid_field_size?(:float, nil, _), do: false
-  defp valid_field_size?(:variable, nil, name) when is_atom(name), do: true
-  defp valid_field_size?(:variable, nil, _name), do: false
-  defp valid_field_size?(_other_type, encode_fun, _size) when not is_nil(encode_fun), do: true
-  defp valid_field_size?(_other_type, _encode_fun, size) when is_integer(size), do: true
-  defp valid_field_size?(_, _, _), do: false
 end
