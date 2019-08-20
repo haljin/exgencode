@@ -6,6 +6,7 @@ defmodule Exgencode.Validator do
   def validate_field(pdu_name, field_name, props, all_fields) do
     validate_custom_encode_decode(pdu_name, field_name, props, all_fields)
     validate_conditional(pdu_name, field_name, props, all_fields)
+    validate_offsets(pdu_name, field_name, props, all_fields)
     validate_field_size(pdu_name, field_name, props, all_fields)
   end
 
@@ -47,12 +48,38 @@ defmodule Exgencode.Validator do
               "Invalid conditional reference to nonexistant field"
             )
 
-        if not is_nil(props[:default]),
+        if not is_nil(props[:default]) and props[:type] != :subrecord,
           do:
             raise_argument_error(
               pdu_name,
               field_name,
               "Conditional fields must default to nil!"
+            )
+
+        :ok
+    end
+  end
+
+  defp validate_offsets(pdu_name, field_name, props, all_fields) do
+    case props[:offset_to] do
+      nil ->
+        :ok
+
+      _field ->
+        if props[:offset_to] not in all_fields,
+          do:
+            raise_argument_error(
+              pdu_name,
+              field_name,
+              "Invalid offset reference to nonexistant field"
+            )
+
+        if props[:type] != :integer,
+          do:
+            raise_argument_error(
+              pdu_name,
+              field_name,
+              "Offset fields cannot define types!"
             )
 
         :ok

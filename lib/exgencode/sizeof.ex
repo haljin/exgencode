@@ -7,7 +7,7 @@ defmodule Exgencode.Sizeof do
     field_list
     |> Enum.map(&build_size/1)
     |> Enum.map(&build_conditional/1)
-    |> Enum.map(fn {name, size} ->
+    |> Enum.map(fn {name, _props, size} ->
       quote do
         def sizeof(pdu, unquote(name)), do: unquote(size)
       end
@@ -35,6 +35,8 @@ defmodule Exgencode.Sizeof do
       end
 
       defp do_size_of_pdu(pdu, fields, version, type) do
+        pdu = Exgencode.Pdu.set_offsets(pdu, version)
+
         fields
         |> Enum.map(fn {field_name, props} ->
           case Exgencode.Pdu.sizeof(pdu, field_name) do
@@ -68,7 +70,11 @@ defmodule Exgencode.Sizeof do
         {name, props, 0}
 
       :subrecord ->
-        {name, props, {:subrecord, props[:default]}}
+        {name, props,
+         {:subrecord,
+          quote do
+            (fn %{unquote(name) => val} -> val end).(pdu)
+          end}}
 
       _ ->
         {name, props, props[:size]}
@@ -78,10 +84,10 @@ defmodule Exgencode.Sizeof do
   defp build_conditional({name, props, size}) do
     case props[:conditional] do
       nil ->
-        {name, size}
+        {name, props, size}
 
       conditional_field_name ->
-        {name,
+        {name, props,
          quote do
            (fn
               %{unquote(conditional_field_name) => val} = p
