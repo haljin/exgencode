@@ -59,10 +59,11 @@ defmodule Exgencode.Offsets do
                 |> Enum.map(fn {n, _} -> n end)
                 |> Enum.map(&Exgencode.Pdu.sizeof(pdu, &1))
                 |> Enum.map(fn
-                  {:subrecord, record} -> Exgencode.Pdu.sizeof_pdu(record, version, :bytes)
-                  val -> div(val, 8)
+                  {:subrecord, record} -> Exgencode.Pdu.sizeof_pdu(record, version, :bits)
+                  val -> val
                 end)
                 |> Enum.sum()
+                |> div(8)
 
               {struct!(pdu, %{unquote(field_name) => val}), version}
           end
