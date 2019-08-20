@@ -117,4 +117,5 @@ defmodule Exgencode.TestPdu do
     static_field: [size: 8],
     versioned_field: [size: 16, version: ">= 2.0.0"],
     something: [size: 8, conditional: :offset_to_something]
+
 end
