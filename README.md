@@ -74,7 +74,7 @@ defmodule MyProtocol do
 end
 ```
 
-Please note that the total size of your PDU must be in full bytes, that is its total size in bits must be divisible by 8. Otherwise, encoding of such PDUs fails as of Elixir 1.6.0.
+Please note that the total size of your PDU must be in full bytes, that is its total size in bits must be divisible by 8.
 
 ### Pdu Protocol
 
