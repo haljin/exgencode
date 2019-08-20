@@ -267,7 +267,7 @@ defmodule Exgencode do
 
   ### offset_to
   Defines that the field contains the offset to another field. The offset is in bytes since the
-  beginning of the PDU. Note that offsets are automatically calculated when calling `Exgencode.Pdu.encode/2
+  beginning of the PDU. Note that offsets are automatically calculated when calling `Exgencode.Pdu.encode/2`
 
   Examples:
 
