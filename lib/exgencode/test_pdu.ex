@@ -117,4 +117,85 @@ defmodule Exgencode.TestPdu do
     static_field: [size: 8],
     versioned_field: [size: 16, version: ">= 2.0.0"],
     something: [size: 8, conditional: :offset_to_something]
+
+  defpdu SlipHeaders,
+    to_device_type: [default: 0, size: 8],
+    to_device_number: [default: 0, size: 8],
+    from_device_type: [default: 0, size: 8],
+    from_device_number: [default: 0, size: 8],
+    packet_type: [default: 0, size: 8],
+    packet_sub_type: [default: 0, size: 8],
+    service_type: [default: 0, size: 8],
+    version_number: [default: 1, size: 8],
+    offset_to_id: [default: 0, size: 8],
+    offset_to_service_info: [default: 0, size: 8],
+    offset_to_message_info: [default: 0, size: 8],
+    offset_to_next_offset: [default: 0, size: 8],
+    from_system_id: [type: :virtual],
+    from_wacn_id: [type: :virtual]
+
+  defpdu GroupGrantOcp,
+    headers: [
+      default: %SlipHeaders{},
+      type: :subrecord
+    ],
+    # ID Section
+    group_addr: [default: 0, size: 24],
+    source_addr: [default: 0, size: 24],
+    wacn_id: [default: 0, size: 24],
+    system_id: [default: 0, size: 16],
+    unit_id: [default: 0, size: 24],
+    # Service Info Section
+    logical_channel_number: [default: 0, size: 8],
+    call_number: [default: 0, size: 16],
+    source_site: [default: 0, size: 8],
+    modulation_type: [default: 0, size: 4],
+    call_priority: [default: 0, size: 4],
+    sef: [default: 0, size: 1],
+    pf: [default: 0, size: 1],
+    priority: [default: 0, size: 3],
+    reliability: [default: 0, size: 3],
+    lmf: [default: 0, size: 1],
+    cmf: [default: 0, size: 1],
+    osf: [default: 0, size: 1],
+    irf: [default: 0, size: 1],
+    pmf: [default: 0, size: 1],
+    ttf: [default: 0, size: 1],
+    ef: [default: 0, size: 1],
+    sf: [default: 0, size: 1],
+    cf: [default: 0, size: 1],
+    df: [default: 0, size: 1],
+    grant_type: [default: 0, size: 3],
+    call_state: [default: 0, size: 3],
+    aa_id: [default: 0, size: 32],
+    mc_id: [default: 0, size: 32],
+    source_urid: [default: 0, size: 32],
+    suf: [default: 0, size: 1],
+    tef: [default: 0, size: 1],
+    _reserved: [default: 0, size: 2],
+    access_type: [default: 0, size: 3],
+    destination_flag: [default: 0, size: 1],
+    slot_bitmap: [default: 0, size: 8],
+    # Next Offset Section
+    offset_to_alias: [default: 0, size: 16, offset_to: :individual_alias_and_id_length],
+    offset_to_data_info: [default: 0, size: 16, offset_to: :message_type_sc],
+    offset_to_location_info: [default: 0, size: 16, offset_to: :location_on_receive_cadence],
+    offset_to_next_offset: [default: 0, size: 16],
+    # Alias Section
+    individual_alias_and_id_length: [size: 8, conditional: :offset_to_alias],
+    individual_alias_and_id: [
+      type: :variable,
+      size: :individual_alias_and_id_length,
+      conditional: :offset_to_alias
+    ],
+    # Data Info Section
+    message_type_sc: [size: 8, conditional: :offset_to_data_info],
+    data_native_talkgroup_and_message_id: [
+      size: 104,
+      conditional: :offset_to_data_info
+    ],
+    data_payload_size: [size: 16, conditional: :offset_to_data_info],
+    data_payload: [type: :variable, size: :data_payload_size, conditional: :offset_to_data_info],
+    # Location Info Section
+    location_on_receive_cadence: [size: 16, conditional: :offset_to_location_info]
 end
