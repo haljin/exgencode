@@ -17,7 +17,7 @@ defmodule Exgencode do
     @spec decode(Exgencode.pdu(), binary, nil | Version.version()) :: {Exgencode.pdu(), binary}
     def decode(pdu, binary, version)
     @doc "Calculate the values of all offset fields."
-    @spec set_offsets(Exgencode.pdu(), Version.version()) :: Exgencode.pdu()
+    @spec set_offsets(Exgencode.pdu(), nil | Version.version()) :: Exgencode.pdu()
     def set_offsets(pdu, version)
   end
 
