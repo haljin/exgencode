@@ -134,6 +134,20 @@ defmodule Exgencode.EncodeDecode do
     wrap_conditional_encode(props, basic_fun)
   end
 
+  def create_encode_fun(:skip, _field_name, props) do
+    field_size = props[:size]
+    default = props[:default]
+    endianness = props[:endianness]
+    field_encode_type = Macro.var(endianness, __MODULE__)
+
+    basic_fun =
+      quote do: fn _ ->
+              <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>>
+            end
+
+    wrap_conditional_encode(props, basic_fun)
+  end
+
   defp wrap_conditional_encode(props, basic_fun) do
     case props[:conditional] do
       nil ->
@@ -248,6 +262,21 @@ defmodule Exgencode.EncodeDecode do
           {struct!(pdu, %{unquote(field_name) => field_value}), rest_binary}
         end
       end
+
+    wrap_conditional_decode(props, basic_fun)
+  end
+
+  def create_decode_fun(:skip, _field_name, props) do
+    field_size = props[:size]
+    endianness = props[:endianness]
+    field_encode_type = Macro.var(endianness, __MODULE__)
+
+    basic_fun =
+      quote do: fn pdu,
+                   <<_::unquote(field_encode_type)-size(unquote(field_size)),
+                     rest_binary::bitstring>> ->
+              {pdu, rest_binary}
+            end
 
     wrap_conditional_decode(props, basic_fun)
   end

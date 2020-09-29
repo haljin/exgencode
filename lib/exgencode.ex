@@ -27,7 +27,7 @@ defmodule Exgencode do
   @type pdu_name :: module
   @typedoc "The type of the field."
   @type field_type ::
-          :subrecord | :constant | :string | :binary | :float | :integer | :variable
+          :subrecord | :constant | :string | :binary | :float | :integer | :variable | :skip
   @typedoc "A custom encoding function that is meant to take the value of the field and return its binary represantion."
   @type field_encode_fun :: (term -> bitstring)
   @typedoc "A custom decoding function that receives the PDU decoded so far and remaining binary and is meant to return PDU with the field decoded and remaining binary."
@@ -81,6 +81,7 @@ defmodule Exgencode do
   * `:float`
   * `:integer`
   * `:variable`
+  * `:skip`
 
   If no type should is specified it will default to `:integer`. Both `:integer` and `:float` specify normal numerical values and have no special properties.
 
@@ -188,6 +189,20 @@ defmodule Exgencode do
 
       iex> Exgencode.Pdu.decode(%TestPdu.StringMsg{}, << 10 :: size(8), "Too short" :: binary, 0, 0, 0, 0, 0, 0, 0>>)
       {%TestPdu.StringMsg{stringField: "Too short"}, <<>>}
+
+  #### :skip
+  If the field will never be decoded into the struct. It's value will be set to `:default` when encoding the struct.
+
+      defpdu SkippedPdu,
+        testField: [default: 1, size: 16],
+        skippedField: [size: 8, default: 5, type: :skip]
+
+      iex> Exgencode.Pdu.encode(%TestPdu.SkippedPdu{testField: 15})
+      << 15 :: size(16), 5 :: size(8) >>
+      iex> %TestPdu.SkippedPdu{}.skippedField
+      ** (KeyError) key :skippedField not found in: %Exgencode.TestPdu.SkippedPdu{testField: 1}
+      iex> Exgencode.Pdu.decode(%TestPdu.SkippedPdu{}, << 32 :: size(16), 11 :: size (8)>>)
+      {%TestPdu.SkippedPdu{testField: 32}, <<>>}
 
   ### encode/decode
   Defines a custom encode or decode function. See type specifications for the function specification. If a PDU has a custom encode function defined it must also define
@@ -319,7 +334,7 @@ defmodule Exgencode do
       end)
 
     struct_fields =
-      for {field_name, props} <- field_list, props[:type] != :constant do
+      for {field_name, props} <- field_list, props[:type] not in [:constant, :skip] do
         {field_name, props[:default]}
       end
 

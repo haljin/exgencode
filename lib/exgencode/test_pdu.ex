@@ -118,4 +118,7 @@ defmodule Exgencode.TestPdu do
     versioned_field: [size: 16, version: ">= 2.0.0"],
     something: [size: 8, conditional: :offset_to_something]
 
+  defpdu SkippedPdu,
+    testField: [default: 1, size: 16],
+    skippedField: [size: 8, default: 5, type: :skip]
 end
