@@ -525,7 +525,7 @@ defmodule ExgencodeTest do
     assert <<1, 0, 3, 4>> == Exgencode.Pdu.encode(pdu)
   end
 
-   test "pdu with conditional fields and offsets" do
+  test "pdu with conditional fields and offsets" do
     pdu0 = %TestPdu.OffsetWithConditionalFieldPdu{}
 
     assert <<0>> == Exgencode.Pdu.encode(pdu0)

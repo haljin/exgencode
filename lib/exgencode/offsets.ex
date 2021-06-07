@@ -39,7 +39,7 @@ defmodule Exgencode.Offsets do
     dependencies =
       field_list
       |> Enum.filter(fn {_, props} ->
-        (props[:conditional] == field_name) and not (props[:type] == :constant)
+        props[:conditional] == field_name and not (props[:type] == :constant)
       end)
       |> Enum.map(fn {name, _} -> name end)
 
@@ -53,8 +53,10 @@ defmodule Exgencode.Offsets do
     other_field = props[:offset_to]
     ignore_other_field? = field_list[other_field][:type] == :constant
 
-    dependencies = if ignore_other_field?, do: offset_dependencies(field_name, field_list),
-      else: Enum.uniq([other_field | offset_dependencies(field_name, field_list)])
+    dependencies =
+      if ignore_other_field?,
+        do: offset_dependencies(field_name, field_list),
+        else: Enum.uniq([other_field | offset_dependencies(field_name, field_list)])
 
     fields_to_offset =
       field_list
