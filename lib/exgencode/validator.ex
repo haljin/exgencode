@@ -48,7 +48,7 @@ defmodule Exgencode.Validator do
               "Invalid conditional reference to nonexistant field"
             )
 
-        if not is_nil(props[:default]) and props[:type] != :subrecord,
+        if not is_nil(props[:default]) and props[:type] != :subrecord and props[:conditional] == nil,
           do:
             raise_argument_error(
               pdu_name,

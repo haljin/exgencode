@@ -59,13 +59,27 @@ defmodule Exgencode.EncodeDecode do
   def create_encode_fun(:constant, _field_name, props) do
     field_size = props[:size]
     default = props[:default]
+    conditional = props[:conditional]
     endianness = props[:endianness]
     field_encode_type = Macro.var(endianness, __MODULE__)
 
     basic_fun =
-      quote do: fn _ ->
+      if conditional == nil do
+        quote do: fn _ ->
+                <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>>
+              end
+      else
+        quote do
+          fn
+            %{unquote(conditional) => field_val}
+            when field_val == nil or field_val == 0 or field_val == "" ->
+              <<>>
+
+            _ ->
               <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>>
-            end
+          end
+        end
+      end
 
     wrap_conditional_encode(props, basic_fun)
   end
