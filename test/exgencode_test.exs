@@ -508,4 +508,45 @@ defmodule ExgencodeTest do
                "1.0.0"
              )
   end
+
+  test "double offset pdus" do
+    pdu = %TestPdu.DoubleOffsetPdu{
+      field_a: 3
+    }
+
+    assert <<1, 2, 3>> == Exgencode.Pdu.encode(pdu)
+  end
+
+  test "double offset shifted pdus" do
+    pdu = %TestPdu.DoubleOffsetShiftedPdu{
+      field_b: 4
+    }
+
+    assert <<1, 0, 3, 4>> == Exgencode.Pdu.encode(pdu)
+  end
+
+  test "pdu with conditional fields and offsets" do
+    pdu0 = %TestPdu.OffsetWithConditionalFieldPdu{}
+
+    assert <<0>> == Exgencode.Pdu.encode(pdu0)
+
+    pdu1 = %TestPdu.OffsetWithConditionalFieldPdu{
+      field_b: 4
+    }
+
+    assert <<1, 4, 0, 0, 4>> == Exgencode.Pdu.encode(pdu1)
+
+    pdu2 = %TestPdu.OffsetWithConditionalFieldPdu{
+      field_b: 5,
+      field_d: 13
+    }
+
+    assert <<1, 4, 0, 5, 5, 0, 13, 0>> == Exgencode.Pdu.encode(pdu2)
+
+    pdu3 = %TestPdu.OffsetWithConditionalFieldPdu{
+      field_d: 13
+    }
+
+    assert <<1, 0, 0, 4, 0, 13, 0>> == Exgencode.Pdu.encode(pdu3)
+  end
 end

@@ -35,8 +35,28 @@ defmodule Exgencode.Offsets do
     end
   end
 
+  def offset_dependencies(field_name, field_list) do
+    dependencies =
+      field_list
+      |> Enum.filter(fn {_, props} ->
+        props[:conditional] == field_name and props[:type] != :constant
+      end)
+      |> Enum.map(fn {name, _} -> name end)
+
+    dependencies ++
+      Enum.flat_map(dependencies, fn field ->
+        offset_dependencies(field, field_list)
+      end)
+  end
+
   def create_offset_fun(field_name, props, field_list) do
     other_field = props[:offset_to]
+    ignore_other_field? = field_list[other_field][:type] == :constant
+
+    dependencies =
+      if ignore_other_field?,
+        do: offset_dependencies(field_name, field_list),
+        else: Enum.uniq([other_field | offset_dependencies(field_name, field_list)])
 
     fields_to_offset =
       field_list
@@ -47,7 +67,7 @@ defmodule Exgencode.Offsets do
       |> Enum.map(fn {name, props} -> {name, props[:version]} end)
 
     quote do: fn
-            %{unquote(other_field) => nil} = pdu, version ->
+            unquote({:%{}, [], Enum.map(dependencies, &{&1, nil})}) = pdu, version ->
               {struct!(pdu, %{unquote(field_name) => 0}), version}
 
             pdu, version ->

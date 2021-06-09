@@ -112,6 +112,28 @@ defmodule Exgencode.TestPdu do
     first_sub: [type: :subrecord, default: %SomeSubPdu{}, conditional: :offset_to_first_sub],
     second_sub: [type: :subrecord, default: %SomeSubPdu{}, conditional: :offset_to_first_sub]
 
+  defpdu DoubleOffsetPdu,
+    first_offset: [size: 8, offset_to: :second_offset],
+    second_offset: [size: 8, offset_to: :field_a, conditional: :first_offset],
+    field_a: [size: 8, conditional: :second_offset]
+
+  defpdu DoubleOffsetShiftedPdu,
+    first_offset: [size: 8, offset_to: :second_offset],
+    second_offset: [size: 8, offset_to: :field_a, conditional: :first_offset],
+    third_offset: [size: 8, offset_to: :field_b, conditional: :first_offset],
+    field_a: [size: 8, conditional: :second_offset],
+    field_b: [size: 8, conditional: :third_offset]
+
+  defpdu OffsetWithConditionalFieldPdu,
+    offset_1: [size: 8, offset_to: :offset_2],
+    offset_2: [size: 8, offset_to: :field_b, conditional: :offset_1],
+    field_a: [size: 8, default: 0x00, type: :constant, conditional: :offset_1],
+    offset_3: [size: 8, offset_to: :offset_4, conditional: :offset_1],
+    field_b: [size: 8, conditional: :offset_2],
+    offset_4: [size: 8, default: 0x00, type: :constant, conditional: :offset_3],
+    field_d: [size: 8, conditional: :offset_3],
+    offset_5: [size: 8, default: 0x00, type: :constant, conditional: :offset_3]
+
   defpdu VersionedOffsetPdu,
     offset_to_something: [size: 16, offset_to: :something],
     static_field: [size: 8],
