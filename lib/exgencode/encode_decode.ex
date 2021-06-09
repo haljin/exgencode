@@ -64,7 +64,7 @@ defmodule Exgencode.EncodeDecode do
     field_encode_type = Macro.var(endianness, __MODULE__)
 
     basic_fun =
-      if conditional == nil do
+      if is_nil(conditional) do
         quote do: fn _ ->
                 <<unquote(default)::unquote(field_encode_type)-size(unquote(field_size))>>
               end

@@ -49,7 +49,7 @@ defmodule Exgencode.Validator do
             )
 
         if not is_nil(props[:default]) and props[:type] != :subrecord and
-             props[:conditional] == nil,
+             is_nil(props[:conditional]),
            do:
              raise_argument_error(
                pdu_name,
