@@ -1,5 +1,5 @@
 # Exgencode
-[![Elixir CI](https://github.com/haljin/exgencode/actions/workflows/ci.yml/badge.svg)](https://github.com/haljin/exgencode/actions/workflows/ci.yml) 
+[![Elixir CI](https://github.com/haljin/exgencode/actions/workflows/ci.yml/badge.svg)](https://github.com/haljin/exgencode/actions/workflows/ci.yml) [![Hex.pm Version](http://img.shields.io/hexpm/v/exgencode.svg?style=flat)](https://hex.pm/packages/exgencode)
 
 ## Description
 
