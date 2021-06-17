@@ -1,5 +1,5 @@
 # Exgencode
-[![Build Status](https://travis-ci.org/haljin/exgencode.svg?branch=master)](https://travis-ci.org/haljin/exgencode) [![Hex.pm Version](http://img.shields.io/hexpm/v/exgencode.svg?style=flat)](https://hex.pm/packages/exgencode) [![Inline docs](http://inch-ci.org/github/haljin/exgencode.svg?branch=master)](http://inch-ci.org/github/haljin/exgencode)
+[![Elixir CI](https://github.com/haljin/exgencode/actions/workflows/ci.yml/badge.svg)](https://github.com/haljin/exgencode/actions/workflows/ci.yml) 
 
 ## Description
 

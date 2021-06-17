@@ -66,6 +66,19 @@ defmodule Exgencode do
       defpdu SomePdu,
         someField: [size: 12]
 
+  Size can also be defined as a function - this is meant to be used together with the custom encode/decode functions that may produce variable length fields.
+
+      defpdu CustomSizeFunPdu,
+        firstField: [default: 2, size: 8],
+        custom: [
+          encode: fn {size, vals} -> <<size::8, vals::size*8>> end,
+          decode: fn pdu, <<size::8, val::binary>> ->
+            <<vals::size*8, rest::binary>> = val
+            {struct(pdu, %{custom: {size, vals}}), rest}
+          end,
+          size: fn %CustomSizeFunPdu{custom: {size, _vals}} -> size * 8 end
+        ],
+
   ### default
   Defines the default value that the field should assume when building a new Elixir structure of the given PDU.
 
@@ -95,8 +108,8 @@ defmodule Exgencode do
 
       iex> Exgencode.Pdu.encode(%TestPdu.PduWithConstant{})
       << 10 :: size(16) >>
-      iex> %TestPdu.PduWithConstant{}.aConstantField
-      ** (KeyError) key :aConstantField not found in: %Exgencode.TestPdu.PduWithConstant{}
+      iex> is_map_key(%TestPdu.PduWithConstant{}, :aConstantField)
+      false
 
   #### :subrecord
   If the field is meant to contain a sub-structure then it should be of type :subrecord. Such field must have either a default value specified that is of the
@@ -199,8 +212,8 @@ defmodule Exgencode do
 
       iex> Exgencode.Pdu.encode(%TestPdu.SkippedPdu{testField: 15})
       << 15 :: size(16), 5 :: size(8) >>
-      iex> %TestPdu.SkippedPdu{}.skippedField
-      ** (KeyError) key :skippedField not found in: %Exgencode.TestPdu.SkippedPdu{testField: 1}
+      iex> is_map_key(%TestPdu.SkippedPdu{}, :skippedField)
+      false
       iex> Exgencode.Pdu.decode(%TestPdu.SkippedPdu{}, << 32 :: size(16), 11 :: size (8)>>)
       {%TestPdu.SkippedPdu{testField: 32}, <<>>}
 

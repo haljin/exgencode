@@ -7,10 +7,16 @@ defmodule Exgencode.Sizeof do
     field_list
     |> Enum.map(&build_size/1)
     |> Enum.map(&build_conditional/1)
-    |> Enum.map(fn {name, _props, size} ->
-      quote do
-        def sizeof(pdu, unquote(name)), do: unquote(size)
-      end
+    |> Enum.map(fn
+      {name, _props, {:fn, _, _} = size} ->
+        quote do
+          def sizeof(pdu, unquote(name)), do: unquote(size).(pdu)
+        end
+
+      {name, _props, size} ->
+        quote do
+          def sizeof(pdu, unquote(name)), do: unquote(size)
+        end
     end)
   end
 

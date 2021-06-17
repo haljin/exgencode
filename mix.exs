@@ -4,12 +4,13 @@ defmodule Exgencode.Mixfile do
   def project do
     [
       app: :exgencode,
-      version: "2.4.0",
+      version: "2.5.0",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
       docs: [extras: ["README.md"], main: "readme"],
+      elixirc_paths: elixirc_paths(Mix.env()),
       description: description()
     ]
   end
@@ -26,8 +27,7 @@ defmodule Exgencode.Mixfile do
     [
       {:ex_doc, "~> 0.20", only: :dev, runtime: false},
       {:credo, "~> 1.0", only: [:dev, :test]},
-      {:inch_ex, "~> 2.0", only: :docs},
-      {:dialyxir, "~> 1.1.0", only: [:dev], runtime: false}
+      {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -54,4 +54,8 @@ defmodule Exgencode.Mixfile do
       links: %{"GitHub" => "https://github.com/haljin/exgencode"}
     ]
   end
+
+  defp elixirc_paths(:dev), do: ["lib", "test/helpers"]
+  defp elixirc_paths(:test), do: ["lib", "test/helpers"]
+  defp elixirc_paths(_), do: ["lib"]
 end
