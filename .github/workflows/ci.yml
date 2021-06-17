@@ -1,0 +1,37 @@
+name: Elixir CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  MIX_ENV: test
+  
+jobs:
+  build:
+
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-elixir@v1.0.0
+      with:
+        otp-version: 24
+        elixir-version: 1.12.1
+
+    # - name: Set up Elixir
+    #   uses: erlef/setup-elixir@885971a72ed1f9240973bd92ab57af8c1aa68f24
+    #   with:
+    #     elixir-version: '1.12.1' 
+    #     otp-version: '24' 
+    - name: Install dependencies
+      run: mix deps.get
+    - name: Run tests
+      run: mix test
+    - name: Run dialyzer
+      run: mix dialyzer
+    - name: Run docs
+      run: mix inch.report
