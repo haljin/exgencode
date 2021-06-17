@@ -143,4 +143,18 @@ defmodule Exgencode.TestPdu do
   defpdu SkippedPdu,
     testField: [default: 1, size: 16],
     skippedField: [size: 8, default: 5, type: :skip]
+
+  defpdu CustomSizeFunPdu,
+    firstField: [default: 2, size: 8],
+    offsetForFun: [offset_to: :oneMore, size: 8],
+    custom: [
+      encode: fn {size, vals} -> <<size::8, vals::size*8>> end,
+      decode: fn pdu, <<size::8, val::binary>> ->
+        <<vals::size*8, rest::binary>> = val
+        {struct(pdu, %{custom: {size, vals}}), rest}
+      end,
+      size: fn %CustomSizeFunPdu{custom: {size, _vals}} -> size * 8 end
+    ],
+    anotherWhyNot: [offset_to: :oneMore, size: 8],
+    oneMore: [default: 4, size: 8]
 end

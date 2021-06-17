@@ -10,7 +10,7 @@ defmodule ExgencodeTest do
     assert Exgencode.Pdu.sizeof(%TestPdu.PzTestMsg{}, :testField) == 12
     assert pdu.otherTestField == nil
     assert pdu.subSection == %TestPdu.MsgSubSection{}
-    assert_raise KeyError, fn -> pdu.constField end
+    refute is_map_key(pdu, :constField)
   end
 
   test "encoding" do
@@ -548,5 +548,20 @@ defmodule ExgencodeTest do
     }
 
     assert <<1, 0, 0, 4, 0, 13, 0>> == Exgencode.Pdu.encode(pdu3)
+  end
+
+  test "custom size function" do
+    pdu = %TestPdu.CustomSizeFunPdu{custom: {5, 1024}}
+
+    assert <<2, 8, 5, 0, 0, 0, 4, 0, 8, 4>> = Exgencode.Pdu.encode(pdu)
+
+    offsets = Exgencode.Pdu.set_offsets(pdu)
+
+    assert {offsets, <<>>} ==
+             Exgencode.Pdu.decode(
+               %TestPdu.CustomSizeFunPdu{},
+               <<2, 8, 5, 0, 0, 0, 4, 0, 8, 4>>,
+               nil
+             )
   end
 end

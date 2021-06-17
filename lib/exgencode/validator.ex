@@ -132,7 +132,7 @@ defmodule Exgencode.Validator do
       |> Enum.map(fn {_field_name, props} ->
         props[:size]
       end)
-      |> Enum.filter(&(not is_nil(&1)))
+      |> Enum.filter(&(not is_nil(&1) and not match?({:fn, _, _}, &1)))
       |> Enum.sum()
 
     if rem(total_size, 8) != 0,
