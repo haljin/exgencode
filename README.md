@@ -1,5 +1,5 @@
 # Exgencode
-[![Elixir CI](https://github.com/haljin/exgencode/actions/workflows/ci.yml/badge.svg)](https://github.com/haljin/exgencode/actions/workflows/ci.yml) [![Inline docs](http://inch-ci.org/github/haljin/exgencode.svg?branch=master)](http://inch-ci.org/github/haljin/exgencode)
+[![Elixir CI](https://github.com/haljin/exgencode/actions/workflows/ci.yml/badge.svg)](https://github.com/haljin/exgencode/actions/workflows/ci.yml) 
 
 ## Description
 

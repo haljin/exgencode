@@ -27,7 +27,6 @@ defmodule Exgencode.Mixfile do
     [
       {:ex_doc, "~> 0.20", only: :dev, runtime: false},
       {:credo, "~> 1.0", only: [:dev, :test]},
-      {:inch_ex, "~> 2.0", only: :docs},
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
     ]
   end
