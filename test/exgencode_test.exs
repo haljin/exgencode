@@ -564,4 +564,9 @@ defmodule ExgencodeTest do
                nil
              )
   end
+
+  test "offset to offset to normal field also works" do
+    pdu = %TestPdu.OffsetMadnessPdu{}
+    assert <<3, 4, 0, 11, 5, 0>> = Exgencode.Pdu.encode(pdu)
+  end
 end

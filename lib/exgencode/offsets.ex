@@ -35,28 +35,33 @@ defmodule Exgencode.Offsets do
     end
   end
 
-  def offset_dependencies(field_name, field_list) do
+  def offset_dependencies(field_name, field_list, other_field) do
+    field_name
+    |> do_offset_dependencies(field_list, other_field)
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp do_offset_dependencies(field_name, field_list, other_field) do
+    # Dependencies for an offset are all the fields that are conditional to that offset, the offset points to via
+    # `offset_to`, but are not constant
     dependencies =
       field_list
-      |> Enum.filter(fn {_, props} ->
-        props[:conditional] == field_name and props[:type] != :constant
+      |> Enum.filter(fn
+        {this_field, props} ->
+          (props[:conditional] == field_name or other_field == this_field) and
+            props[:type] != :constant
       end)
-      |> Enum.map(fn {name, _} -> name end)
 
     dependencies ++
-      Enum.flat_map(dependencies, fn field ->
-        offset_dependencies(field, field_list)
+      Enum.flat_map(dependencies, fn {field, props} ->
+        do_offset_dependencies(field, field_list, props[:offset_to])
       end)
   end
 
   def create_offset_fun(field_name, props, field_list) do
     other_field = props[:offset_to]
-    ignore_other_field? = field_list[other_field][:type] == :constant
 
-    dependencies =
-      if ignore_other_field?,
-        do: offset_dependencies(field_name, field_list),
-        else: Enum.uniq([other_field | offset_dependencies(field_name, field_list)])
+    dependencies = offset_dependencies(field_name, field_list, other_field)
 
     fields_to_offset =
       field_list
@@ -83,7 +88,7 @@ defmodule Exgencode.Offsets do
                   val -> val
                 end)
                 |> Enum.sum()
-                |> div(8)
+                |> div(8) # Offsets are always in full bytes
 
               {struct!(pdu, %{unquote(field_name) => val}), version}
           end

@@ -157,4 +157,11 @@ defmodule Exgencode.TestPdu do
     ],
     anotherWhyNot: [offset_to: :oneMore, size: 8],
     oneMore: [default: 4, size: 8]
+
+  defpdu OffsetMadnessPdu,
+    someField: [default: 3, size: 8],
+    offsetToOffset: [offset_to: :anotherOffset, size: 8],
+    somethingIrrelevant: [default: 11, size: 16],
+    anotherOffset: [offset_to: :somethingElse, size: 8],
+    somethingElse: [default: 0, size: 8]
 end

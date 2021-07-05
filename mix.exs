@@ -4,7 +4,7 @@ defmodule Exgencode.Mixfile do
   def project do
     [
       app: :exgencode,
-      version: "2.5.0",
+      version: "2.5.1",
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
