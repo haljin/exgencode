@@ -19,6 +19,9 @@ defmodule Exgencode do
     @doc "Calculate the values of all offset fields."
     @spec set_offsets(Exgencode.pdu(), nil | Version.version()) :: Exgencode.pdu()
     def set_offsets(pdu, version)
+    @doc "Get the packet mermaid doc string"
+    @spec get_doc(Exgencode.pdu()) :: String.t()
+    def get_doc(pdu)
   end
 
   @typedoc "A PDU, that is an Elixir structure representing a PDU."
@@ -354,7 +357,18 @@ defmodule Exgencode do
     # out =
     quote do
       defmodule unquote(name) do
-        @moduledoc false
+        @moduledoc """
+
+        ## Packet Structure
+
+        ```mermaid
+        ---
+        title "#{unquote(name)}"
+        ---
+        packet-beta
+        #{unquote(build_get_doc(field_list)) |> elem(0)}
+        ```
+        """
 
         defstruct unquote(struct_fields)
 
@@ -379,6 +393,10 @@ defmodule Exgencode do
           do_decode(pdu, binary, unquote(fields_for_decodes), version)
         end
 
+        def get_doc(_pdu) do
+          unquote(build_get_doc(field_list))
+        end
+
         defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
           {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
           do_decode(new_pdu, rest_binary, rest, version)
@@ -392,6 +410,29 @@ defmodule Exgencode do
 
     # File.write("#{Macro.to_string(name)}.ex", Macro.to_string(out))
     # out
+  end
+
+  defp build_get_doc(field_list) do
+    quote do
+      Enum.reduce(unquote(field_list), {"", 0}, fn {field_name, props}, {entry, last_pos} ->
+        case props[:type] do
+          :virtual ->
+            {entry, last_pos}
+
+          :subrecord ->
+            {sub_entry, last_sub_pos} = Pdu.Protocol.get_doc(props[:default])
+            {entry <> sub_entry, last_pos + last_sub_pos}
+
+          :variable ->
+            {entry <> "#{last_pos}-#{last_pos + 32 - 1}: \"#{field_name} (variable)\"\n",
+             last_pos + 32}
+
+          :integer ->
+            {entry <> "#{last_pos}-#{last_pos + props[:size] - 1}: \"#{field_name}\"\n",
+             last_pos + props[:size]}
+        end
+      end)
+    end
   end
 
   defp map_fields(name, original_field_list) do
