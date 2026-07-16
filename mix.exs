@@ -4,7 +4,7 @@ defmodule Exgencode.Mixfile do
   def project do
     [
       app: :exgencode,
-      version: "2.5.3",
+      version: "2.6.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -50,7 +50,7 @@ defmodule Exgencode.Mixfile do
         "LICENSE*"
       ],
       maintainers: ["Pawel Antemijczuk"],
-      licenses: ["MIT License"],
+      licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/haljin/exgencode"}
     ]
   end
