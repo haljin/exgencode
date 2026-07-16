@@ -87,11 +87,15 @@ defmodule ExgencodeTest do
 
     nested_pdu = %TestPdu.NestedVersionedMsg{nested: %TestPdu.VersionedMsg{}}
     binary = <<2::size(16), 10::size(16)>>
-    assert {^nested_pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.NestedVersionedMsg{}, binary, "1.0.0")
+
+    assert {^nested_pdu, <<>>} =
+             Exgencode.Pdu.decode(%TestPdu.NestedVersionedMsg{}, binary, "1.0.0")
 
     nested_pdu = %TestPdu.NestedVersionedMsg{nested: %TestPdu.VersionedMsg{newerField: 111}}
     binary = <<2::size(16), 10::size(16), 111::size(8)>>
-    assert {^nested_pdu, <<>>} = Exgencode.Pdu.decode(%TestPdu.NestedVersionedMsg{}, binary, "2.0.0")
+
+    assert {^nested_pdu, <<>>} =
+             Exgencode.Pdu.decode(%TestPdu.NestedVersionedMsg{}, binary, "2.0.0")
   end
 
   test "versioned encode/decode symmetry" do
@@ -569,14 +573,14 @@ defmodule ExgencodeTest do
   test "custom size function" do
     pdu = %TestPdu.CustomSizeFunPdu{custom: {5, 1024}}
 
-    assert <<2, 8, 5, 0, 0, 0, 4, 0, 8, 4>> = Exgencode.Pdu.encode(pdu)
+    assert <<2, 9, 5, 0, 0, 0, 4, 0, 8, 4>> = Exgencode.Pdu.encode(pdu)
 
     offsets = Exgencode.Pdu.set_offsets(pdu)
 
     assert {offsets, <<>>} ==
              Exgencode.Pdu.decode(
                %TestPdu.CustomSizeFunPdu{},
-               <<2, 8, 5, 0, 0, 0, 4, 0, 8, 4>>,
+               <<2, 9, 5, 0, 0, 0, 4, 0, 8, 4>>,
                nil
              )
   end
@@ -584,5 +588,105 @@ defmodule ExgencodeTest do
   test "offset to offset to normal field also works" do
     pdu = %TestPdu.OffsetMadnessPdu{}
     assert <<3, 4, 0, 11, 5, 0>> = Exgencode.Pdu.encode(pdu)
+  end
+
+  test "decode reaches offset_to : skips gap" do
+    binary = <<7, 0, 3, "abc", 0, 0xDE, 0xAD, 0xBE, 0xEF>>
+
+    assert {%TestPdu.OffsetMsg{
+              offset_to_footer: 7,
+              name_length: 3,
+              name: "abc",
+              footer: 0xDEADBEEF
+            }, <<>>} == Exgencode.Pdu.decode(%TestPdu.OffsetMsg{}, binary)
+  end
+
+  test "decode with zero-length gap (offset == cursor) is unchanged" do
+    binary = <<6, 0, 3, "abc", 0xDE, 0xAD, 0xBE, 0xEF>>
+
+    assert {%TestPdu.OffsetMsg{
+              offset_to_footer: 6,
+              name_length: 3,
+              name: "abc",
+              footer: 0xDEADBEEF
+            }, <<>>} == Exgencode.Pdu.decode(%TestPdu.OffsetMsg{}, binary)
+  end
+
+  test "decode with offset 0 leaves the target field absent" do
+    binary = <<0, 0, 3, "abc">>
+
+    assert {%TestPdu.OffsetMsg{
+              offset_to_footer: 0,
+              name_length: 3,
+              name: "abc",
+              footer: nil
+            }, <<>>} == Exgencode.Pdu.decode(%TestPdu.OffsetMsg{}, binary)
+  end
+
+  test "multiple offsets with offset_to gap" do
+    binary = <<4, 8, 0, 2, "XY", 0, 0, 0xBE, 0xEF>>
+
+    assert {%TestPdu.MultiOffsetMsg{
+              offset_to_a: 4,
+              offset_to_b: 8,
+              len_a: 2,
+              field_a: "XY",
+              field_b: 0xBEEF
+            }, <<>>} == Exgencode.Pdu.decode(%TestPdu.MultiOffsetMsg{}, binary)
+  end
+
+  test "decode raises on a backwards offset" do
+    binary = <<4, 0, 3, "abc", 0xDE, 0xAD, 0xBE, 0xEF>>
+
+    assert_raise Exgencode.DecodeError, ~r/point backwards/, fn ->
+      Exgencode.Pdu.decode(%TestPdu.OffsetMsg{}, binary)
+    end
+  end
+
+  test "decode raises on an offset past the end of the binary" do
+    binary = <<20, 0, 3, "abc", 0, 0xDE, 0xAD, 0xBE, 0xEF>>
+
+    assert_raise Exgencode.DecodeError, ~r/cannot point outside binary/, fn ->
+      Exgencode.Pdu.decode(%TestPdu.OffsetMsg{}, binary)
+    end
+  end
+
+  test "offsets in a nested subrecord stay relative to that subrecord" do
+    binary = <<9, 7, 0, 3, "abc", 0, 0xDE, 0xAD, 0xBE, 0xEF>>
+
+    assert {%TestPdu.NestedOffsetMsg{
+              header: 9,
+              sub: %TestPdu.OffsetMsg{
+                offset_to_footer: 7,
+                name_length: 3,
+                name: "abc",
+                footer: 0xDEADBEEF
+              }
+            }, <<>>} == Exgencode.Pdu.decode(%TestPdu.NestedOffsetMsg{}, binary)
+  end
+
+  test "defining two offset fields to the same target is rejected at compile time" do
+    assert_raise ArgumentError, ~r/multiple offset fields pointing/, fn ->
+      defmodule BadDup do
+        import Exgencode
+
+        defpdu DuplicateOffsetPdu,
+          off_a: [size: 8, offset_to: :target],
+          off_b: [size: 8, offset_to: :target],
+          target: [size: 8, conditional: :off_a]
+      end
+    end
+  end
+
+  test "defining an offset field after its target is rejected at compile time" do
+    assert_raise ArgumentError, ~r/backward offsets are unsupported/, fn ->
+      defmodule BadOrder do
+        import Exgencode
+
+        defpdu BackwardsOffsetPdu,
+          target: [size: 8],
+          off: [size: 8, offset_to: :target]
+      end
+    end
   end
 end

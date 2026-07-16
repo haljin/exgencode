@@ -126,6 +126,12 @@ defmodule Exgencode.Validator do
   end
 
   def validate_pdu(pdu_name, fields) do
+    validate_pdu_size(pdu_name, fields)
+    validate_offset_ordering(pdu_name, fields)
+    validate_no_duplicate_offsets(pdu_name, fields)
+  end
+
+  defp validate_pdu_size(pdu_name, fields) do
     total_size =
       fields
       |> Enum.reject(fn {_field_name, props} -> props[:type] == :variable end)
@@ -141,6 +147,40 @@ defmodule Exgencode.Validator do
           ArgumentError,
           "#{inspect(pdu_name |> Macro.to_string())} Total size of PDU must be divisible into full bytes!"
         )
+  end
+
+  defp validate_offset_ordering(pdu_name, fields) do
+    Enum.reduce(fields, [], fn {field_name, props}, seen_names ->
+      target = props[:offset_to]
+
+      if not is_nil(target) and target in seen_names do
+        raise ArgumentError,
+              "#{inspect(Macro.to_string(pdu_name))} #{inspect(target)}: backward offsets are unsupported!"
+      end
+
+      [field_name | seen_names]
+    end)
+  end
+
+  defp validate_no_duplicate_offsets(pdu_name, fields) do
+    Enum.reduce(fields, [], fn {field_name, props}, seen_targets ->
+      target = props[:offset_to]
+
+      cond do
+        is_nil(target) ->
+          seen_targets
+
+        target in seen_targets ->
+          raise_argument_error(
+            pdu_name,
+            field_name,
+            "multiple offset fields pointing to target #{inspect(target)} is unsupported!"
+          )
+
+        true ->
+          [target | seen_targets]
+      end
+    end)
   end
 
   defp raise_argument_error(pdu_name, field_name, msg) do

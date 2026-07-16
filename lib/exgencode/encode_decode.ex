@@ -303,6 +303,45 @@ defmodule Exgencode.EncodeDecode do
     wrap_conditional_decode(props, basic_fun)
   end
 
+  def skip_to_offset(pdu, field, rest_binary, pdu_bit_size, offset_targets) do
+    case offset_targets do
+      %{^field => offset_field} ->
+        do_skip_to_offset(pdu, field, offset_field, rest_binary, pdu_bit_size)
+
+      _ ->
+        rest_binary
+    end
+  end
+
+  defp do_skip_to_offset(pdu, field, offset_field, rest_binary, pdu_bit_size) do
+    case Map.get(pdu, offset_field) do
+      offset when offset in [0, nil] ->
+        rest_binary
+
+      offset ->
+        cursor = pdu_bit_size - bit_size(rest_binary)
+        target = offset * 8
+
+        cond do
+          target == cursor ->
+            rest_binary
+
+          target < cursor ->
+            raise Exgencode.DecodeError,
+                  "offset field #{inspect(offset_field)} of #{inspect(field)} cannot point backwards!"
+
+          target > pdu_bit_size ->
+            raise Exgencode.DecodeError,
+                  "offset_field #{inspect(offset_field)} cannot point outside binary!"
+
+          true ->
+            gap_bits = target - cursor
+            <<_padding::size(gap_bits), rest::bitstring>> = rest_binary
+            rest
+        end
+    end
+  end
+
   def wrap_custom_encode(field_name, encode_fun) do
     quote do
       fn pdu ->

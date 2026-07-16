@@ -8,15 +8,15 @@ on:
 
 env:
   MIX_ENV: test
-  
+
 jobs:
   build:
     runs-on: ubuntu-latest
     name: OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     strategy:
       matrix:
-        otp: ['23.3', '24.0']
-        elixir: ['1.12.1', '1.11.4']
+        otp: ['28.5', '29.0']
+        elixir: ['1.18.4', '1.19.0']
     steps:
     - uses: actions/checkout@v2
     - uses: erlef/setup-beam@v1

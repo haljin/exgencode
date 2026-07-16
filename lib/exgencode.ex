@@ -346,6 +346,12 @@ defmodule Exgencode do
         {field_name, props[:decode]}
       end)
 
+    offset_targets =
+      for {field_name, props} <- field_list, props[:offset_to] != nil, into: %{} do
+        {props[:offset_to], field_name}
+      end
+      |> Macro.escape()
+
     struct_fields =
       for {field_name, props} <- field_list, props[:type] not in [:constant, :skip] do
         {field_name, props[:default]}
@@ -376,15 +382,24 @@ defmodule Exgencode do
         end
 
         def decode(pdu, binary, version) do
-          do_decode(pdu, binary, unquote(fields_for_decodes), version)
+          do_decode(pdu, binary, unquote(fields_for_decodes), version, bit_size(binary))
         end
 
-        defp do_decode(pdu, binary, [{field, decode_fun} | rest], version) do
+        defp do_decode(pdu, binary, [{field, decode_fun} | rest], version, pdu_bit_size) do
+          binary =
+            Exgencode.EncodeDecode.skip_to_offset(
+              pdu,
+              field,
+              binary,
+              pdu_bit_size,
+              unquote(offset_targets)
+            )
+
           {new_pdu, rest_binary} = decode_fun.(version).(pdu, binary)
-          do_decode(new_pdu, rest_binary, rest, version)
+          do_decode(new_pdu, rest_binary, rest, version, pdu_bit_size)
         end
 
-        defp do_decode(pdu, rest_bin, [], _) do
+        defp do_decode(pdu, rest_bin, [], _, _) do
           {pdu, rest_bin}
         end
       end

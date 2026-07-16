@@ -4,8 +4,8 @@ defmodule Exgencode.Mixfile do
   def project do
     [
       app: :exgencode,
-      version: "2.5.2",
-      elixir: "~> 1.7",
+      version: "2.5.3",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
@@ -26,8 +26,8 @@ defmodule Exgencode.Mixfile do
   defp deps do
     [
       {:ex_doc, "~> 0.20", only: :dev, runtime: false},
-      {:credo, "~> 1.0", only: [:dev, :test]},
-      {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7.13", only: [:dev, :test]},
+      {:dialyxir, "~> 1.4.0", only: [:dev, :test], runtime: false}
     ]
   end
 

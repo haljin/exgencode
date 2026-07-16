@@ -157,9 +157,9 @@ defmodule Exgencode.TestPdu do
         <<vals::size*8, rest::binary>> = val
         {struct(pdu, %{custom: {size, vals}}), rest}
       end,
-      size: fn %CustomSizeFunPdu{custom: {size, _vals}} -> size * 8 end
+      size: fn %CustomSizeFunPdu{custom: {size, _vals}} -> (size + 1) * 8 end
     ],
-    anotherWhyNot: [offset_to: :oneMore, size: 8],
+    anotherWhyNot: [size: 8, default: 8],
     oneMore: [default: 4, size: 8]
 
   defpdu OffsetMadnessPdu,
@@ -168,4 +168,21 @@ defmodule Exgencode.TestPdu do
     somethingIrrelevant: [default: 11, size: 16],
     anotherOffset: [offset_to: :somethingElse, size: 8],
     somethingElse: [default: 0, size: 8]
+
+  defpdu OffsetMsg,
+    offset_to_footer: [size: 8, offset_to: :footer, default: 0x00],
+    name_length: [size: 16, default: 0],
+    name: [type: :variable, size: :name_length, conditional: :name_length],
+    footer: [size: 32, conditional: :offset_to_footer]
+
+  defpdu MultiOffsetMsg,
+    offset_to_a: [size: 8, offset_to: :field_a, default: 0x00],
+    offset_to_b: [size: 8, offset_to: :field_b, default: 0x00],
+    len_a: [size: 16, default: 0],
+    field_a: [type: :variable, size: :len_a, conditional: :len_a],
+    field_b: [size: 16, conditional: :offset_to_b]
+
+  defpdu NestedOffsetMsg,
+    header: [size: 8, default: 0],
+    sub: [type: :subrecord, default: %OffsetMsg{}]
 end
